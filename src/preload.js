@@ -56,7 +56,12 @@ contextBridge.exposeInMainWorld('desk', {
   getPrefs: call('prefs:get'),
   notifyTest: call('notify:test'),
   setPrefs: call('prefs:set'),
+  // settings shared with the phone app (sync.js)
+  syncStatus: call('sync:status'),
+  syncSetUrl: call('sync:setUrl'),
+  syncNow: call('sync:now'),
   // backend → page notifications
   onEventsChanged: (fn) => ipcRenderer.on('events:changed', () => fn()),
+  onPrefsChanged: (fn) => ipcRenderer.on('prefs:changed', (_e, keys) => fn(keys)), // changed on the phone
   onCommand: (fn) => ipcRenderer.on('app:command', (_e, name, payload) => fn(name, payload)), // tray menu, notifications
 });

@@ -370,6 +370,22 @@
               <div><div class="srow-title">Google OAuth client</div><div class="srow-desc">The credentials.json from Google Cloud Console</div></div>
               <button type="button" id="btn-replace-creds" class="btn">Replace credentials.json…</button>
             </div>
+            <h3>Phone app</h3>
+            <p class="muted">Optional: if you also run the Desk Calendar phone app, link it here to keep these the same on both: which calendars and task lists are shown, default calendar and list, default event length, time format, week start, reminder minutes and About you. Reminders on/off, views and the assistant stay separate.</p>
+            <div class="srow">
+              <div><div class="srow-title">Phone app address</div><div class="srow-desc" id="s-sync-status">Not linked</div></div>
+              <div class="srow-inline">
+                <input id="s-sync-url" placeholder="https://desk-calendar.yourname.workers.dev" spellcheck="false" />
+                <button type="button" id="btn-sync-link" class="btn primary">Link</button>
+              </div>
+            </div>
+            <div class="srow" id="s-sync-actions" hidden>
+              <div><div class="srow-title">Sync now</div><div class="srow-desc">Happens on its own every few minutes and when you switch back to this window.</div></div>
+              <div class="srow-inline">
+                <button type="button" id="btn-sync-now" class="btn">Sync now</button>
+                <button type="button" id="btn-sync-unlink" class="btn subtle">Unlink</button>
+              </div>
+            </div>
             <div class="srow">
               <div><div class="srow-title">Your data</div>
                 <div class="srow-desc">Your Google sign-in and AI API keys are encrypted with your Windows account and stored in %APPDATA%. Nothing is stored in the project folder.</div></div>

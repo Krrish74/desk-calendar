@@ -57,6 +57,18 @@ $('btn-signin').onclick = async () => {
 
 const signedIn = () => !$('app').hidden;
 
+// Settings changed on the phone (shared through the phone app, see src/main/sync.js):
+// pick them up and redraw. Settings → Account → Phone app links the two.
+desk.onPrefsChanged(async () => {
+  const { prefs } = unwrap(await desk.getPrefs());
+  state.prefs = prefs;
+  applyPrefs();
+  if (!signedIn()) return;
+  loadCalendars();
+  refreshScreen();
+  if (!$('settings-page').hidden) fillSettings();
+});
+
 /** Apply preferences that change how things are drawn (called after Settings changes). */
 function applyPrefs() {
   state.weekStartsOn = state.prefs.weekStartsOn;

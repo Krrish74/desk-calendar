@@ -58,6 +58,7 @@ async function savePrefs(changes) {
 async function fillSettings() {
   const { prefs, hotkeyLabel, hotkeyStatus, isPackaged } = unwrap(await desk.getPrefs());
   state.prefs = prefs;
+  fillSync();
 
   // General: simple selects named p-<prefName>
   const cals = state.calendars.filter((c) => c.canEdit);
@@ -398,4 +399,38 @@ $('btn-replace-creds').onclick = async () => {
   try {
     if (unwrap(await desk.importCredentials())) status('New credentials.json loaded. Sign out and back in to use it.');
   } catch (e) { status(e.message, true); }
+};
+
+// ============================================================================
+// Account → Phone app: settings shared with the iPhone app (src/main/sync.js)
+// ============================================================================
+
+async function fillSync() {
+  const st = unwrap(await desk.syncStatus());
+  if (document.activeElement !== $('s-sync-url')) $('s-sync-url').value = st.url;
+  $('btn-sync-link').textContent = st.url ? 'Save' : 'Link';
+  $('s-sync-actions').hidden = !st.url;
+  const desc = $('s-sync-status');
+  desc.classList.toggle('error-text', !!st.error);
+  desc.textContent = st.error ? st.error
+    : !st.url ? 'Not linked'
+      : st.lastAt ? `Linked · synced ${fmtTime(new Date(st.lastAt))}` : 'Linking…';
+}
+
+$('btn-sync-link').onclick = async () => {
+  $('s-sync-status').textContent = 'Linking…';
+  try {
+    unwrap(await desk.syncSetUrl($('s-sync-url').value));
+  } catch (err) { status(err.message, true); }
+  fillSync();
+};
+$('btn-sync-now').onclick = async () => {
+  $('s-sync-status').textContent = 'Syncing…';
+  try { unwrap(await desk.syncNow()); } catch (err) { status(err.message, true); }
+  fillSync();
+};
+$('btn-sync-unlink').onclick = async () => {
+  $('s-sync-url').value = '';
+  try { unwrap(await desk.syncSetUrl('')); } catch (err) { status(err.message, true); }
+  fillSync();
 };

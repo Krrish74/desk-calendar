@@ -1,0 +1,85 @@
+<!doctype html>
+<!-- Desk Calendar for iPhone: the app shell. The scripts in js/ fill it in.
+     viewport-fit=cover lets the app draw under the notch / home indicator; app.css
+     then pads with the safe-area insets so nothing important sits there. -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#0f1115">
+  <meta name="format-detection" content="telephone=no">
+  <title>Desk Calendar</title>
+  <!-- Paint the background dark before the stylesheet arrives (no white flash on launch). -->
+  <style>html, body { background: #0f1115; }</style>
+
+  <!-- Installable app ("Add to Home Screen"): the manifest for browsers that read it,
+       plus the Apple tags iPhone uses instead.
+         apple-mobile-web-app-capable        opens full-screen, without Safari's bars
+         status-bar-style black-translucent   the app draws under the status bar (app.css pads
+                                              for it with safe-area-inset-top)
+         apple-mobile-web-app-title           the name under the Home Screen icon
+         apple-touch-icon                     the Home Screen icon (180×180, opaque) -->
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Desk Cal">
+  <link rel="apple-touch-icon" href="img/apple-touch-icon.png">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/icons.css">
+  <link rel="stylesheet" href="css/app.css">
+  <script type="module" src="js/app.js"></script>
+</head>
+<body>
+  <!-- Signed out -->
+  <div id="signin" hidden>
+    <div class="card">
+      <img src="icon.svg" alt="">
+      <h1>Desk Calendar</h1>
+      <p id="signin-msg">Your Google Calendar, on your iPhone.</p>
+      <a class="btn primary block" id="btn-signin" href="/auth/login">Sign in with Google</a>
+      <p class="signin-links"><a href="/about">About</a> · <a href="/privacy">Privacy</a> · <a href="/terms">Terms</a></p>
+    </div>
+  </div>
+
+  <!-- Signed in -->
+  <div id="app" hidden>
+    <header id="top">
+      <div class="bar">
+        <button class="icon" id="btn-prev" aria-label="Previous"><i class="ico i-chevron_left"></i></button>
+        <button id="range-label" aria-label="Refresh"></button>
+        <button class="icon" id="btn-next" aria-label="Next"><i class="ico i-chevron_right"></i></button>
+        <span class="spacer"></span>
+        <span id="sample-badge" hidden title="Fake calendar for local testing">SAMPLE</span>
+        <button id="btn-today">Today</button>
+        <button class="icon" id="btn-settings" aria-label="Settings"><i class="ico i-settings"></i></button>
+      </div>
+      <div id="countdown" hidden>
+        <div class="cd-main">
+          <div class="cd-label" id="cd-label"></div>
+          <div class="cd-title" id="cd-title"></div>
+          <div class="cd-time" id="cd-time"></div>
+          <div class="progress" id="cd-progress" hidden><div id="cd-progress-bar"></div></div>
+        </div>
+        <a class="btn join" id="cd-join" target="_blank" rel="noopener" hidden><i class="ico i-video"></i>Join</a>
+      </div>
+    </header>
+
+    <main id="view"></main>
+    <div id="status" role="status"></div>
+
+    <button id="fab" aria-label="Add event"><i class="ico i-add"></i></button>
+
+    <nav id="tabs">
+      <button data-view="agenda"><i class="ico i-calendar_agenda"></i>Agenda</button>
+      <button data-view="day"><i class="ico i-calendar_day"></i>Day</button>
+      <button data-view="3day"><i class="ico i-calendar_3_day"></i>3 Days</button>
+      <button data-view="month"><i class="ico i-calendar_month"></i>Month</button>
+      <button data-tab="assistant"><i class="ico i-sparkle"></i>Assistant</button>
+    </nav>
+  </div>
+
+  <div id="scrim" hidden></div>
+</body>
+</html>

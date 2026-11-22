@@ -33,6 +33,10 @@ const DEFAULTS = {
   assistantModel: 'claude-haiku-5-5',      // Claude model, when the provider is Claude (see MODELS in assistant.js)
   assistantModels: {},                     // { providerId: model } for the other providers; unset = the provider's default
   assistantBaseUrls: {},                   // { providerId: url } server-address overrides; unset = the provider's default
+  syncUrl: null,                           // the phone app's address (Settings → Account); shares some settings (sync.js)
+  syncLinked: false,                       // first link with that address done
+  syncDirty: [],                           // shared settings changed here and not sent yet
+  syncLastAt: 0,                           // when settings were last synced with the phone app
 };
 
 const file = () => path.join(app.getPath('userData'), 'prefs.json');
@@ -49,11 +53,16 @@ function all() {
 
 const get = (key) => all()[key];
 
+const listeners = [];
+/** Call fn(changes) after every set() (sync.js uses it to send shared settings to the phone app). */
+const onChange = (fn) => { listeners.push(fn); };
+
 function set(changes) {
   cache = { ...all(), ...changes };
   fs.mkdirSync(app.getPath('userData'), { recursive: true });
   fs.writeFileSync(file(), JSON.stringify(cache, null, 2));
+  for (const fn of listeners) fn(changes);
   return cache;
 }
 
-module.exports = { all, get, set, DEFAULTS };
+module.exports = { all, get, set, onChange, DEFAULTS };

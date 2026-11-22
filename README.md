@@ -33,9 +33,28 @@ change your schedule. Built with Electron. Bring your own Google Cloud project a
 | A Google account | The calendar you want to see. |
 | A Google Cloud project (free) | You create your own OAuth client in about 10 minutes: [SETUP-GOOGLE.md](SETUP-GOOGLE.md). |
 | An AI provider (optional) | Only for the assistant. Several are free: [docs/ASSISTANT.md](docs/ASSISTANT.md). |
+| An iPhone + a free Cloudflare account (optional) | Only for the phone app: see [iPhone app](#iphone-app-optional) below. |
 
 Nobody shares credentials here: everyone who runs this app sets up their **own** Google Cloud project and
 their **own** AI key. Nothing secret is in this repository.
+
+## iPhone app (optional)
+
+The same calendar on your iPhone: Agenda / Day / 3-day / Month views, quick add, Google Tasks, the Claude
+assistant with task planning, and silent reminder notifications. It's an installable web app (`mobile/`) that you
+add to your Home Screen, served by a small, free **Cloudflare Worker** (`worker/`) that keeps you signed in to
+Google, holds the Claude key, sends the reminders, and only lets your own Google account in. No Mac, Xcode or
+Apple developer account needed.
+
+1. Set up the Google Cloud project ([SETUP-GOOGLE.md](SETUP-GOOGLE.md) steps 1–3) if you haven't already.
+2. Follow **[SETUP-IPHONE.md](SETUP-IPHONE.md)** (about 30 minutes): Cloudflare account, `npm run setup:db`,
+   `npm run deploy`, a Web OAuth client, `npm run secrets`, then Add to Home Screen.
+3. Optional: in the Windows app, **Settings → Account → Phone app** links the two, so shown calendars, defaults
+   and "About you" stay the same on both.
+
+The Windows app doesn't need any of it. The code is explained in [worker/README.md](worker/README.md); its tests
+run with `npm test` inside `worker/`, and `npm run dev:mock` there runs the whole phone app locally against a fake
+calendar.
 
 ## Quick start
 
@@ -121,6 +140,7 @@ src/
 │  ├─ freetime.js         working-hours free time for the assistant (pure functions, unit-tested)
 │  ├─ quickadd.js         "gym tomorrow 6pm #work" → {title, start, end, calendar} using chrono-node
 │  ├─ providers.js        the AI providers the assistant can use (add your own here)
+│  ├─ sync.js             optional: shares some settings with the iPhone app (Settings → Account → Phone app)
 │  └─ assistant.js        assistant: tools, profile prompt, caching, cost tracking, the tool-use loop
 ├─ preload.js             the bridge: exposes window.desk.* to the page, nothing else
 ├─ assets/                app icon (icon.svg is the source) + Fluent UI icons (MIT)
@@ -150,6 +170,11 @@ docs/
 scripts/                  icons, the cost benchmark (bench.ps1 → bench-assistant.js)
 test/                     unit/ (node --test) and electron/run.js (assistant + UI tests)
 build/icon.ico            installer icon
+
+Optional iPhone app (SETUP-IPHONE.md):
+mobile/                   the phone app: plain HTML/CSS/JS, no build step (views, sheets, service worker)
+worker/                   its Cloudflare Worker: sign-in, calendar/tasks proxy, assistant, reminders, settings sync
+                          (worker/README.md lists every file; worker/test/ has its tests)
 ```
 
 How a drag flows: `interactions.js` calls `desk.updateEvent(...)` → `preload.js` sends IPC message

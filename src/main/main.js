@@ -20,6 +20,7 @@ const prefs = require('./prefs');
 const windowManager = require('./windowManager');
 const background = require('./background');
 const notifier = require('./notifier');
+const { createSync } = require('./sync');
 
 // The window lives in windowManager.js; tray, hotkey and start-with-Windows in background.js.
 const win = () => windowManager.get();
@@ -50,6 +51,10 @@ app.whenReady().then(async () => {
   windowManager.create({ startHidden: background.launchedAtLogin() && prefs.get('startHidden') });
   hotkeyStatus = background.start().hotkey;
   notifier.start();
+  // Settings shared with the phone app (sync.js): check now, every few minutes, and
+  // whenever the window comes forward.
+  phoneSync.start();
+  windowManager.get()?.on('focus', () => phoneSync.onFocus());
 });
 
 // Closing the window only hides it, so the app keeps running until Quit in the tray.
@@ -85,6 +90,21 @@ function handle(channel, fn) {
 // and let the notification scheduler re-fetch upcoming events.
 const notifyChanged = () => { win()?.webContents.send('events:changed'); notifier.invalidate(); };
 
+// --- Settings shared with the phone app (see sync.js) ---
+const phoneSync = createSync({
+  prefs,
+  getToken: async () => (await auth.getClient().getAccessToken()).token,
+  // The phone changed something: redraw with it (and re-check reminder times).
+  onApplied: (keys) => {
+    win()?.webContents.send('prefs:changed', keys);
+    if (keys.includes('notifyMinutes')) notifier.invalidate();
+  },
+});
+prefs.onChange((changes) => phoneSync.onLocalChange(changes));
+handle('sync:status', () => phoneSync.status());
+handle('sync:setUrl', (url) => phoneSync.setUrl(url));
+handle('sync:now', () => phoneSync.syncNow());
+
 // --- auth ---
 handle('auth:status', () => ({ hasCredentials: auth.hasCredentials(), signedIn: auth.isSignedIn() }));
 handle('auth:importCredentials', async () => {
@@ -97,7 +117,7 @@ handle('auth:importCredentials', async () => {
   auth.importCredentials(filePaths[0]);
   return true;
 });
-handle('auth:signIn', () => auth.signIn());
+handle('auth:signIn', async () => { const r = await auth.signIn(); phoneSync.syncNow(); return r; });
 handle('auth:signOut', () => auth.signOut());
 // Your Google account's email: the ID of your primary calendar is your address.
 handle('auth:account', async () => (await calendar.listCalendars()).find((c) => c.primary)?.id || '');

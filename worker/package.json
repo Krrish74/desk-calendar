@@ -1,0 +1,33 @@
+{
+  "name": "desk-calendar-worker",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Cloudflare Worker backend for the Desk Calendar iPhone app (PWA)",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "dev:mock": "wrangler dev --var MOCK_GOOGLE:1 --test-scheduled",
+    "db:local": "wrangler d1 migrations apply desk-calendar --local",
+    "db:remote": "wrangler d1 migrations apply desk-calendar --remote",
+    "deploy": "npm run assets && npm run db:remote && wrangler deploy",
+    "check": "wrangler deploy --dry-run --outdir .wrangler/dry-run",
+    "assets": "node scripts/build-mobile-assets.mjs",
+    "icons": "cd .. && npx electron worker/scripts/make-mobile-icons.cjs",
+    "vapid": "node scripts/make-vapid-keys.mjs",
+    "setup:db": "node scripts/setup-d1.mjs",
+    "secrets": "node scripts/setup-secrets.mjs",
+    "logs": "wrangler tail",
+    "test": "node --test \"test/*.test.mjs\""
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.8.0",
+    "chrono-node": "^2.10.3"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true,
+    "workerd@1.20261119.1": true
+  }
+}
