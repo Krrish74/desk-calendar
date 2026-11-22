@@ -22,6 +22,8 @@
 //   keyUrl        where to get a key (shown as a link)
 //   local         runs on this PC: no key, no cost, nothing leaves your computer
 //   note          one line of advice under the provider picker
+//   prices        optional { 'model-id': { in, out, cacheRead } } in US$ per million tokens,
+//                 so Settings can show what each message cost (otherwise only token counts)
 //
 // Model ids change often. The defaults below were current in November 2026; if one
 // stops working, click "Load models" in Settings to see what your key can use.

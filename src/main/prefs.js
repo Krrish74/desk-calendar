@@ -25,6 +25,10 @@ const DEFAULTS = {
   defaultCalendarId: null,                 // calendar for new events; null = your primary calendar
   notifyEnabled: true,                     // desktop notifications before events
   notifyMinutes: 10,                       // ...this many minutes before (0 = at start time)
+  taskListVisibility: {},                  // { taskListId: true/false } for Google Tasks lists; unset = shown
+  defaultTaskListId: null,                 // list for new tasks; null = your main list ("My Tasks")
+  userProfile: null,                       // "About you" for the assistant (Settings → Assistant); see assistant.js PROFILE_DEFAULTS
+  assistantUsage: null,                    // { month: 'YYYY-MM', cost, requests, last } running total of assistant spend
   assistantProvider: 'anthropic',          // which AI service answers (see providers.js)
   assistantModel: 'claude-haiku-5-5',      // Claude model, when the provider is Claude (see MODELS in assistant.js)
   assistantModels: {},                     // { providerId: model } for the other providers; unset = the provider's default

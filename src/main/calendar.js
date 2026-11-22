@@ -143,6 +143,7 @@ function normalize(e, cal) {
     // true only for a real Google Meet attached to the event (not a pasted Zoom link)
     hasGoogleMeet: !!(e.hangoutLink || e.conferenceData?.conferenceSolution?.key?.type === 'hangoutsMeet'),
     colorId: e.colorId || '',                     // '' = uses the calendar's color
+    taskLink: e.extendedProperties?.private?.deskTask || '', // 'listId|taskId' for a task's time block
     reminders: e.reminders || { useDefault: true }, // { useDefault, overrides: [{ method, minutes }] }
     htmlLink: e.htmlLink,
   };
@@ -209,10 +210,13 @@ const ymd = (d) =>
  *   colorId    '1'..'11' for one of Google's event colors, '' to go back to the calendar's color
  *   reminders  'default' (the calendar's own reminders) or a list of minutes, e.g. [10, 60, 1440]
  *   meet       'add' to create a Google Meet link, 'remove' to take it off
+ *   taskLink   'listId|taskId': marks the event as a time block for that Google Task
+ *              (stored privately on the event; only this app reads it)
  * Returns extra request parameters (Meet changes need conferenceDataVersion=1).
  */
-function applyExtras(body, { colorId, reminders, meet }) {
+function applyExtras(body, { colorId, reminders, meet, taskLink }) {
   if (colorId !== undefined) body.colorId = colorId || null; // null clears it
+  if (taskLink) body.extendedProperties = { private: { deskTask: taskLink } };
   if (reminders !== undefined) {
     body.reminders = reminders === 'default'
       ? { useDefault: true }

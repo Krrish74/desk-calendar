@@ -93,6 +93,18 @@ function create({ startHidden = false } = {}) {
     },
   });
 
+  // While developing, the app is electron.exe + this project folder. Tell Windows how to relaunch
+  // it, so pinning the taskbar button opens Desk Calendar instead of Electron's blank demo window.
+  // (The installed app is its own Desk Calendar.exe and doesn't need this.)
+  if (process.platform === 'win32' && !app.isPackaged) {
+    win.setAppDetails({
+      appId: 'com.local.deskcalendar',
+      relaunchCommand: `"${process.execPath}" "${app.getAppPath()}"`,
+      relaunchDisplayName: 'Desk Calendar (dev)',
+      appIconPath: path.join(app.getAppPath(), 'build', 'icon.ico'),
+    });
+  }
+
   // ?mica=1 tells the page to make its background transparent (see styles.css: html.mica).
   win.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'), {
     query: { mica: SUPPORTS_MICA ? '1' : '0' },

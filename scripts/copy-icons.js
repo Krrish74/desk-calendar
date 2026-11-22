@@ -20,7 +20,7 @@ const ICONS = [
   'navigation', 'chevron_left', 'chevron_right', 'chevron_down', 'arrow_sync', 'pin', 'chat',
   'settings', 'add', 'video', 'location', 'calendar_ltr', 'arrow_left', 'dismiss', 'checkmark',
   'delete', 'edit', 'open', 'copy', 'alert', 'color', 'text_description', 'clock', 'sparkle',
-  'send', 'arrow_undo', 'person', 'link',
+  'send', 'arrow_undo', 'person', 'link', 'task_list_ltr', 'circle', 'checkmark_circle', 'calendar_clock',
 ];
 
 fs.mkdirSync(OUT, { recursive: true });

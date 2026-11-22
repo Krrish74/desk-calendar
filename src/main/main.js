@@ -15,6 +15,7 @@ const auth = require('./auth');
 const calendar = require('./calendar');
 const quickadd = require('./quickadd');
 const assistant = require('./assistant');
+const tasks = require('./tasks');
 const prefs = require('./prefs');
 const windowManager = require('./windowManager');
 const background = require('./background');
@@ -74,7 +75,8 @@ function handle(channel, fn) {
         return { error: 'Your Google sign-in expired. Please sign in again.', code: 'NOT_SIGNED_IN' };
       }
       console.error(`[${channel}]`, msg);
-      return { error: msg };
+      // Tasks permission / API problems carry a code so the page can offer the fix.
+      return /^TASKS_/.test(err.code) ? { error: msg, code: err.code } : { error: msg };
     }
   });
 }
@@ -120,11 +122,15 @@ handle('cal:delete', (ev) => calendar.deleteEvent(ev));
 // The wait lives here in the backend so refreshes don't resurrect it and quitting
 // the app still finishes the delete (see the before-quit handler at the top).
 const UNDO_MS = 6000;
-const pendingDeletes = new Map(); // token → { calendarId, eventId, timer }
+// The same queue handles Google Tasks: entries are { kind: 'event', calendarId, eventId }
+// or { kind: 'task', listId, taskId }.
+const pendingDeletes = new Map(); // token → { kind, …ids, timer }
 let nextToken = 1;
 
 const pendingDeleteKeys = () =>
-  new Set([...pendingDeletes.values()].map((p) => `${p.calendarId}|${p.eventId}`));
+  new Set([...pendingDeletes.values()].filter((p) => p.kind === 'event').map((p) => `${p.calendarId}|${p.eventId}`));
+const pendingTaskKeys = () =>
+  new Set([...pendingDeletes.values()].filter((p) => p.kind === 'task').map((p) => `${p.listId}|${p.taskId}`));
 
 async function runDelete(token) {
   const p = pendingDeletes.get(token);
@@ -132,17 +138,22 @@ async function runDelete(token) {
   clearTimeout(p.timer);
   pendingDeletes.delete(token);
   try {
-    await calendar.deleteEvent(p);
+    await (p.kind === 'task' ? tasks.deleteTask(p) : calendar.deleteEvent(p));
   } catch (err) {
     console.error('[delete]', err.message);
   }
   notifyChanged();
 }
 
-/** Hide an event and queue its deletion. The countdown starts now, or later via startDeleteTimer(). */
-function queueDelete({ calendarId, eventId }, startNow = true) {
+/**
+ * Hide an event ({ calendarId, eventId }) or a task ({ kind: 'task', listId, taskId }) and
+ * queue its deletion. The countdown starts now, or later via startDeleteTimer().
+ */
+function queueDelete(item, startNow = true) {
   const token = nextToken++;
-  pendingDeletes.set(token, { calendarId, eventId, timer: null });
+  pendingDeletes.set(token, item.kind === 'task'
+    ? { kind: 'task', listId: item.listId, taskId: item.taskId, timer: null }
+    : { kind: 'event', calendarId: item.calendarId, eventId: item.eventId, timer: null });
   if (startNow) startDeleteTimer(token);
   return token;
 }
@@ -164,6 +175,35 @@ handle('cal:undoDelete', (token) => cancelDelete(token));
 // whose reply never arrived has no timer yet; it's dropped and the event stays.)
 const flushDeletes = () =>
   Promise.all([...pendingDeletes.entries()].filter(([, p]) => p.timer).map(([token]) => runDelete(token)));
+
+// --- Google Tasks ---
+// Tasks need the extra "tasks" permission; sign-ins from before it existed get
+// a "Connect Google Tasks" button, which simply signs in again (Google keeps the rest).
+handle('tasks:status', () => ({ connected: auth.hasTasksScope() }));
+handle('tasks:connect', () => auth.signIn());
+handle('tasks:lists', () => tasks.listTaskLists({ fresh: true }));
+handle('tasks:setListVisible', (id, visible) => tasks.setListVisible(id, visible));
+/** { fromISO, toISO, includeOverdue, includeUndated, includeCompleted } */
+handle('tasks:list', async (q = {}) => {
+  const list = await tasks.listTasks({
+    ...q,
+    from: q.fromISO ? new Date(q.fromISO) : undefined,
+    to: q.toISO ? new Date(q.toISO) : undefined,
+  });
+  return list.filter((t) => !pendingTaskKeys().has(`${t.listId}|${t.id}`));
+});
+handle('tasks:create', (t) => tasks.createTask(t));
+handle('tasks:update', (t) => tasks.updateTask(t));
+handle('tasks:deleteLater', ({ listId, taskId }) => queueDelete({ kind: 'task', listId, taskId }));
+handle('tasks:parse', (text) => parseTask(text));
+
+/** "call mom friday" → { title: 'call mom', due: '2026-11-27' }. No date → today. */
+function parseTask(text) {
+  const p = quickadd.parse(String(text || ''), new Date(), prefs.get('defaultEventMinutes'));
+  if (!p || !p.title) return { title: String(text || '').trim(), due: tasks.ymd(new Date()), dateFound: false };
+  // All-day results are already 'YYYY-MM-DD' (new Date() would read them as UTC, a day early here).
+  return { title: p.title, due: p.allDay ? p.start : tasks.ymd(new Date(p.start)), dateFound: true };
+}
 
 // --- quick add ---
 handle('quick:parse', (text) => parseQuick(text));

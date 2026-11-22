@@ -92,6 +92,7 @@ async function loadEvents() {
   const { start, end } = viewRange();
   const today = startOfDay(new Date());
   $('btn-refresh').classList.add('spinning');
+  loadTasks(); // Google Tasks load alongside (sidebar + Agenda); see tasks.js
   try {
     const [inView, soon] = await Promise.all([
       desk.getEvents(start.toISOString(), end.toISOString()),

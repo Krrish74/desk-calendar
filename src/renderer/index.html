@@ -101,6 +101,25 @@
         </form>
         <div id="quick-preview" hidden></div>
 
+        <section id="today-tasks">
+          <div class="tt-head">
+            <h2><i class="ico i-task_list_ltr"></i>Today's tasks</h2>
+            <span id="tt-count" class="tt-count"></span>
+          </div>
+          <div id="tt-connect" hidden>
+            <p id="tt-connect-msg" class="muted"></p>
+            <button type="button" id="btn-connect-tasks" class="btn small">Connect Google Tasks</button>
+          </div>
+          <ul id="tt-list"></ul>
+          <form id="tt-add" autocomplete="off">
+            <i class="ico i-add"></i>
+            <input id="tt-input" placeholder='Add a task: "call mom friday"' />
+          </form>
+          <div id="tt-preview" hidden></div>
+          <button type="button" id="tt-done-toggle" class="link-btn" hidden></button>
+          <ul id="tt-done" hidden></ul>
+        </section>
+
         <section id="minimonth">
           <div class="mm-head">
             <span id="mm-label"></span>
@@ -196,6 +215,10 @@
               <div><div class="srow-title">Default calendar for new events</div><div class="srow-desc">Quick add uses it unless you type a #calendar</div></div>
               <select id="p-defaultCalendarId"></select>
             </div>
+            <div class="srow">
+              <div><div class="srow-title">Default list for new tasks</div><div class="srow-desc">Google Tasks list used by "Add a task" and the assistant</div></div>
+              <select id="p-defaultTaskListId"></select>
+            </div>
 
             <h3>Background</h3>
             <div class="srow">
@@ -218,6 +241,9 @@
             <h2>Calendars</h2>
             <p class="muted">Choose which calendars Desk Calendar shows. This doesn't change Google Calendar itself.</p>
             <div id="sp-cal-list"></div>
+            <h3>Task lists</h3>
+            <p class="muted" id="sp-tasklist-note">Which Google Tasks lists appear in "Today's tasks" and the Agenda.</p>
+            <div id="sp-tasklist-list"></div>
           </section>
 
           <!-- Notifications -->
@@ -280,6 +306,57 @@
                 <button type="button" id="btn-save-key" class="btn primary">Save</button>
               </div>
             </div>
+
+            <h3>About you</h3>
+            <p class="muted">The assistant uses this when it plans your tasks into time blocks. It's sent with each message (cached, so it costs very little). Changing it starts a new chat.</p>
+            <div class="srow">
+              <div><div class="srow-title">Working days</div></div>
+              <div id="pf-days" class="day-picks"></div>
+            </div>
+            <div class="srow">
+              <div><div class="srow-title">Working hours</div></div>
+              <div class="srow-inline times"><input type="time" id="pf-dayStart" /><span>to</span><input type="time" id="pf-dayEnd" /></div>
+            </div>
+            <div class="srow">
+              <div><div class="srow-title">Lunch break</div><div class="srow-desc">Kept free. Clear both times for no fixed lunch.</div></div>
+              <div class="srow-inline times"><input type="time" id="pf-lunchStart" /><span>to</span><input type="time" id="pf-lunchEnd" /></div>
+            </div>
+            <div class="srow">
+              <div><div class="srow-title">Best focus time</div><div class="srow-desc">Demanding work goes here</div></div>
+              <select id="pf-focusTime">
+                <option value="morning">Morning</option>
+                <option value="afternoon">Afternoon</option>
+                <option value="evening">Evening</option>
+                <option value="none">No preference</option>
+              </select>
+            </div>
+            <div class="srow">
+              <div><div class="srow-title">Work blocks</div><div class="srow-desc">Usual length · longest · break between blocks (minutes)</div></div>
+              <div class="srow-inline nums">
+                <input type="number" id="pf-blockMinutes" min="15" max="480" step="5" title="Usual length" />
+                <input type="number" id="pf-maxBlockMinutes" min="15" max="480" step="5" title="Longest block" />
+                <input type="number" id="pf-breakMinutes" min="0" max="120" step="5" title="Break between blocks" />
+              </div>
+            </div>
+            <div class="srow">
+              <div><div class="srow-title">Buffer around meetings</div><div class="srow-desc">Minutes kept free before and after events</div></div>
+              <input type="number" id="pf-meetingBuffer" min="0" max="120" step="5" class="num" />
+            </div>
+            <div class="srow">
+              <div><div class="srow-title">Color for time blocks</div><div class="srow-desc">Events the assistant creates for your tasks</div></div>
+              <div id="pf-blockColor" class="swatches"></div>
+            </div>
+            <div class="srow column">
+              <div><div class="srow-title">Anything else</div>
+                <div class="srow-desc">How you like to work, in your own words. E.g. "No meetings or deep work after 8pm. Gym Mon/Wed/Fri at 6pm. I'm slow on Mondays."</div></div>
+              <textarea id="pf-notes" rows="4" maxlength="1500"></textarea>
+              <div class="srow-desc right" id="pf-notes-count"></div>
+            </div>
+
+            <h3>Cost</h3>
+            <div class="srow">
+              <div><div class="srow-title">Assistant spending</div><div class="srow-desc" id="s-usage">No messages yet this month.</div></div>
+            </div>
           </section>
 
           <!-- Account -->
@@ -306,6 +383,27 @@
   </div>
 
   <!-- Event editor ---------------------------------------------------------->
+  <dialog id="task-editor">
+    <form id="task-editor-form" method="dialog">
+      <h2 id="task-editor-heading">Task</h2>
+      <div class="ed-body">
+        <label>Title <input id="tf-title" required /></label>
+        <div class="grid2">
+          <label>Due date <input type="date" id="tf-due" /></label>
+          <label class="row nodate"><input type="checkbox" id="tf-nodate" /> No due date</label>
+        </div>
+        <label>List <select id="tf-list"></select></label>
+        <label>Notes <textarea id="tf-notes" rows="3"></textarea></label>
+      </div>
+      <div class="dialog-buttons">
+        <button type="button" id="btn-task-delete" class="btn danger">Delete</button>
+        <span class="spacer"></span>
+        <button type="button" id="btn-task-cancel" class="btn">Cancel</button>
+        <button type="submit" class="btn primary">Save</button>
+      </div>
+    </form>
+  </dialog>
+
   <dialog id="editor">
     <form id="editor-form" method="dialog">
       <h2 id="editor-heading">Event</h2>
@@ -356,6 +454,7 @@
   <script src="js/views.js"></script>
   <script src="js/interactions.js"></script>
   <script src="js/editor.js"></script>
+  <script src="js/tasks.js"></script>
   <script src="js/chat.js"></script>
   <script src="js/settings.js"></script>
   <script src="js/app.js"></script>

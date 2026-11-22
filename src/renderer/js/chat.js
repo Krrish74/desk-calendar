@@ -6,7 +6,7 @@
 // When the assistant changes your calendar, small cards appear under its reply;
 // click one to jump to that event.
 
-const SUGGESTIONS = ["What's tomorrow?", 'Find free time this week', 'Move my next event', 'Summarize my week'];
+const SUGGESTIONS = ["What's tomorrow?", 'Plan my tasks for this week', 'Find 2 hours for deep work tomorrow', 'Summarize my week'];
 
 function toggleChat(open = !$('chat').classList.contains('open')) {
   $('chat').classList.toggle('open', open);
@@ -33,7 +33,7 @@ async function showWelcome() {
     m.append(el('div', 'msg-actions'), go);
     return;
   }
-  addMsg('bot', "Hi! I can add, move, rename or delete events, and answer questions about your schedule.");
+  addMsg('bot', "Hi! I can add, move or delete events and tasks, plan your tasks into time blocks, and answer questions about your schedule.");
   const chips = el('div', 'chips');
   chips.id = 'chat-chips';
   for (const s of SUGGESTIONS) {
@@ -89,17 +89,27 @@ function inline(s) {
 function actionCard(a) {
   const card = el('button', `action-card ${a.kind}`);
   card.type = 'button';
-  const verb = { created: 'Created', updated: 'Updated', deleted: 'Deleted' }[a.kind];
-  card.append(icon(a.kind === 'deleted' ? 'delete' : 'checkmark'));
+  const verb = {
+    created: 'Created', updated: 'Updated', deleted: 'Deleted',
+    'task-created': 'Added task', 'task-updated': 'Updated task', 'task-completed': 'Completed', 'task-reopened': 'Reopened',
+  }[a.kind] || 'Changed';
+  const isTask = a.kind.startsWith('task-') || a.isTask;
+  card.append(icon(a.kind === 'deleted' ? 'delete' : a.kind === 'task-completed' ? 'checkmark_circle' : isTask ? 'task_list_ltr' : 'checkmark'));
   const text = el('span', 'ac-text');
   text.append(el('b', '', `${verb} ${a.title}`));
-  if (a.start) {
+  if (isTask && a.due) {
+    const [y, m, d] = a.due.split('-').map(Number);
+    text.append(el('span', 'ac-when', `Due ${fmtDay(new Date(y, m - 1, d))}`));
+  } else if (a.start) {
     const s = new Date(a.start), e = new Date(a.end);
     text.append(el('span', 'ac-when', a.allDay ? fmtDay(s) : `${fmtDay(s)}, ${fmtTime(s)} – ${fmtTime(e)}`));
   }
   card.append(text);
   if (a.kind === 'deleted') card.disabled = true;
-  else {
+  else if (isTask) {
+    card.title = "Show in Today's tasks";
+    card.onclick = () => document.querySelector(`.task-row[data-task-id="${CSS.escape(a.id)}"]`)?.scrollIntoView({ block: 'center' });
+  } else {
     card.title = 'Show in calendar';
     card.onclick = () => { state.highlightId = a.id; goToDate(new Date(a.start)); };
   }
@@ -115,7 +125,12 @@ async function sendChat(text) {
   const pending = addMsg('bot', 'Thinking…', 'thinking');
   $('chat-send').disabled = true;
   try {
-    const { reply, actions } = unwrap(await desk.chatSend(text));
+    const { reply, actions, freshStart } = unwrap(await desk.chatSend(text));
+    if (freshStart) {
+      // The backend started a new conversation (long pause or a long chat), so earlier
+      // messages are no longer remembered. Say so where it happened.
+      pending.before(el('div', 'chat-divider', 'New conversation: earlier messages are not remembered'));
+    }
     pending.className = 'msg bot';
     pending.replaceChildren(...richText(reply));
     if (actions?.length) {
@@ -140,7 +155,7 @@ async function sendChat(text) {
  */
 function offerUndo(deleted, cards) {
   if (!deleted.length) return;
-  const label = deleted.length === 1 ? `Deleted “${deleted[0].title}”` : `Deleted ${deleted.length} events`;
+  const label = deleted.length === 1 ? `Deleted “${deleted[0].title}”` : `Deleted ${deleted.length} items`;
   showToast(label, 'Undo', async () => {
     let restored = 0;
     for (const a of deleted) if ((await desk.undoDelete(a.token)).data) restored++;
@@ -152,7 +167,7 @@ function offerUndo(deleted, cards) {
         card.querySelector('.ico').className = 'ico i-arrow_undo';
       }
     }
-    loadEvents();
+    loadEvents(); // also reloads tasks
   });
 }
 

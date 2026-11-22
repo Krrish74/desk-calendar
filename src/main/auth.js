@@ -26,7 +26,9 @@ const store = require('./secureStore');
 const SCOPES = [
   'https://www.googleapis.com/auth/calendar.readonly', // calendar list, colors, events
   'https://www.googleapis.com/auth/calendar.events',   // create / edit / delete events
+  'https://www.googleapis.com/auth/tasks',             // Google Tasks: read, add, complete, delete
 ];
+const TASKS_SCOPE = 'https://www.googleapis.com/auth/tasks';
 
 const TOKEN_KEY = 'google-token';
 let client = null;      // the signed-in OAuth2Client, shared with calendar.js
@@ -128,7 +130,9 @@ function signIn() {
           codeVerifier: verifier,
         });
         oauth.setCredentials(tokens);
-        savedTokens = tokens;
+        // Google leaves out `scope` on some token responses; remember what we asked for then.
+        savedTokens = { ...tokens, scope: tokens.scope || SCOPES.join(' ') };
+        tokens.scope = savedTokens.scope;
         await store.save(TOKEN_KEY, tokens);
         client = oauth;
         finish(true, 'You can close this tab and go back to Desk Calendar.');
@@ -150,6 +154,7 @@ function signIn() {
           access_type: 'offline', // ask for a refresh_token
           prompt: 'consent',      // always return a refresh_token, even on re-login
           scope: SCOPES,
+          include_granted_scopes: true, // keep what was granted before (adding Tasks to an old sign-in)
           state,
           code_challenge_method: CodeChallengeMethod.S256,
           code_challenge: pkce.codeChallenge,
@@ -182,4 +187,6 @@ module.exports = {
   signIn, signOut, restoreSession, getClient, importCredentials,
   hasCredentials: () => !!findCredentialsFile(),
   isSignedIn: () => !!client,
+  /** True when the current sign-in includes Google Tasks (sign-ins from older versions don't). */
+  hasTasksScope: () => !!client && (savedTokens?.scope || '').split(' ').includes(TASKS_SCOPE),
 };

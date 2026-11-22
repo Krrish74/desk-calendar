@@ -77,6 +77,7 @@ async function fillSettings() {
   setHotkeyMsg(hotkeyStatus.ok ? 'Works from any app. Click the box, then press new keys.' : hotkeyStatus.error, !hotkeyStatus.ok);
 
   renderSettingsCalendars();
+  await fillTaskListSettings(prefs);
 
   // Assistant
   await fillAssistant();
@@ -96,6 +97,7 @@ for (const name of ['startView', 'weekStartsOn', 'agendaDays', 'timeFormat', 'de
     if (await savePrefs({ [name]: value })) applyPrefs();
   });
 }
+$('p-defaultTaskListId').addEventListener('change', (e) => savePrefs({ defaultTaskListId: e.target.value || null }));
 
 $('p-notifyEnabled').onchange = async () => {
   await savePrefs({ notifyEnabled: $('p-notifyEnabled').checked });
@@ -130,6 +132,34 @@ function renderSettingsCalendars() {
     row.append(left, toggle);
     list.append(row);
   }
+}
+
+// Google Tasks lists: show/hide (Calendars section) and the default list (General).
+async function fillTaskListSettings(prefs) {
+  const res = await desk.getTaskLists();
+  const lists = res.data || [];
+  state.taskLists = lists;
+  $('p-defaultTaskListId').replaceChildren(new Option('My main list', ''), ...lists.map((l) => new Option(l.name, l.id)));
+  $('p-defaultTaskListId').value = prefs.defaultTaskListId || '';
+  $('p-defaultTaskListId').disabled = !!res.error;
+  $('sp-tasklist-note').textContent = res.error
+    ? 'Google Tasks isn\'t connected yet: use "Connect Google Tasks" in the sidebar.'
+    : 'Which Google Tasks lists appear in "Today\'s tasks" and the Agenda.';
+  $('sp-tasklist-list').replaceChildren(...lists.map((l) => {
+    const row = el('div', 'srow');
+    const left = el('div', 'cal-name');
+    left.append(icon('task_list_ltr'), el('div', 'srow-title', l.name));
+    const toggle = el('input', 'toggle');
+    toggle.type = 'checkbox';
+    toggle.checked = l.visible;
+    toggle.onchange = async () => {
+      l.visible = toggle.checked;
+      await desk.setTaskListVisible(l.id, toggle.checked);
+      loadTasks();
+    };
+    row.append(left, toggle);
+    return row;
+  }));
 }
 
 // ============================================================================
@@ -232,6 +262,78 @@ async function fillAssistant() {
     ? '✔ A key is saved (encrypted with your Windows account). Paste a new one to replace it.'
     : info.keyFromEnv ? `Using the ${info.keyEnv} environment variable.`
     : p.keyRequired ? 'No key saved yet.' : 'Only needed if your server checks keys.';
+
+  fillProfile(info.profile);
+  showUsage(info.usage);
+}
+
+// --- About you (the assistant's profile) ------------------------------------
+
+const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+let profile = null;
+
+function fillProfile(p) {
+  profile = { ...p };
+  $('pf-days').replaceChildren(...[1, 2, 3, 4, 5, 6, 0].map((d) => {
+    const on = p.workDays.includes(d);
+    const b = el('button', `day-pick${on ? ' on' : ''}`, DAY_NAMES[d]);
+    b.type = 'button';
+    b.setAttribute('aria-pressed', String(on));
+    b.onclick = () => {
+      const days = on ? profile.workDays.filter((x) => x !== d) : [...profile.workDays, d];
+      saveProfile({ workDays: days });
+    };
+    return b;
+  }));
+  for (const k of ['dayStart', 'dayEnd', 'lunchStart', 'lunchEnd', 'focusTime', 'blockMinutes', 'maxBlockMinutes', 'breakMinutes', 'meetingBuffer']) {
+    $(`pf-${k}`).value = String(p[k] ?? '');
+  }
+  $('pf-notes').value = p.notes;
+  $('pf-notes-count').textContent = `${p.notes.length} / 1500`;
+  renderBlockColors();
+}
+
+function renderBlockColors() {
+  const box = $('pf-blockColor');
+  box.replaceChildren(...[['', 'Calendar color', '#7aa2ff'], ...GOOGLE_COLORS].map(([id, name, hex]) => {
+    const b = el('button', `swatch${id === '' ? ' default' : ''}${id === profile.blockColorId ? ' selected' : ''}`);
+    b.type = 'button';
+    b.title = name;
+    b.style.background = hex;
+    b.style.color = textOn(hex);
+    if (id === profile.blockColorId) b.append(icon('checkmark'));
+    b.onclick = () => saveProfile({ blockColorId: id });
+    return b;
+  }));
+}
+
+/** Save profile changes; the backend validates them and starts a fresh chat. */
+async function saveProfile(changes) {
+  try {
+    const info = unwrap(await desk.chatSetSettings({ profile: { ...profile, ...changes } }));
+    $('chat-log').replaceChildren();
+    fillProfile(info.profile);
+    status('Saved. The assistant will use this from your next message.');
+  } catch (e) { status(e.message, true); }
+}
+
+for (const k of ['dayStart', 'dayEnd', 'lunchStart', 'lunchEnd', 'focusTime']) {
+  $(`pf-${k}`).addEventListener('change', (e) => saveProfile({ [k]: e.target.value }));
+}
+for (const k of ['blockMinutes', 'maxBlockMinutes', 'breakMinutes', 'meetingBuffer']) {
+  $(`pf-${k}`).addEventListener('change', (e) => saveProfile({ [k]: Number(e.target.value) }));
+}
+$('pf-notes').addEventListener('input', () => { $('pf-notes-count').textContent = `${$('pf-notes').value.length} / 1500`; });
+$('pf-notes').addEventListener('change', () => saveProfile({ notes: $('pf-notes').value }));
+
+/** "Last message ≈ $0.0011 · This month ≈ $0.04 (37 messages)". */
+function showUsage(u) {
+  if (!u) { $('s-usage').textContent = 'No messages yet this month.'; return; }
+  const money = (v) => (v == null ? null : v < 0.01 ? `$${v.toFixed(4)}` : `$${v.toFixed(2)}`);
+  const tokens = (t) => `${(t.input + t.cacheWrite + t.cacheRead).toLocaleString()} in (${t.cacheRead.toLocaleString()} from cache) · ${t.output.toLocaleString()} out`;
+  const last = u.last ? `Last message ≈ ${money(u.last.cost) ?? tokens(u.last)}` : '';
+  const month = `This month ≈ ${u.cost ? money(u.cost) : tokens(u.tokens)} (${u.messages} message${u.messages === 1 ? '' : 's'})`;
+  $('s-usage').textContent = [last, month].filter(Boolean).join(' · ');
 }
 
 function setModelMsg(text, isError = false, isOk = false) {

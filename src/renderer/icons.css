@@ -57,3 +57,11 @@
 .i-person-filled { --icon: url(../assets/icons/person_20_filled.svg); }
 .i-link { --icon: url(../assets/icons/link_20_regular.svg); }
 .i-link-filled { --icon: url(../assets/icons/link_20_filled.svg); }
+.i-task_list_ltr { --icon: url(../assets/icons/task_list_ltr_20_regular.svg); }
+.i-task_list_ltr-filled { --icon: url(../assets/icons/task_list_ltr_20_filled.svg); }
+.i-circle { --icon: url(../assets/icons/circle_20_regular.svg); }
+.i-circle-filled { --icon: url(../assets/icons/circle_20_filled.svg); }
+.i-checkmark_circle { --icon: url(../assets/icons/checkmark_circle_20_regular.svg); }
+.i-checkmark_circle-filled { --icon: url(../assets/icons/checkmark_circle_20_filled.svg); }
+.i-calendar_clock { --icon: url(../assets/icons/calendar_clock_20_regular.svg); }
+.i-calendar_clock-filled { --icon: url(../assets/icons/calendar_clock_20_filled.svg); }

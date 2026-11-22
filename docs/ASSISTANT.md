@@ -20,15 +20,19 @@ calls, to that provider. Pick one below, follow its steps, and try a message suc
 
 ## How it works
 
-The model never touches Google directly. It gets five tools:
+The model never touches Google directly. It gets ten tools:
 
 | Tool | What it does |
 |---|---|
-| `list_calendars` | your calendars, with ids and whether they're editable |
-| `list_events` | events between two dates, across all visible calendars |
-| `create_event` | add an event |
+| `list_calendars` | your calendars, with short ids and whether they're editable |
+| `list_events` | events between two dates (up to 31 days), across all visible calendars |
+| `create_event` | add an event; with `task_id` it becomes a time block linked to that task |
 | `update_event` | change title, time, location or description |
 | `delete_event` | delete an event (you get 6 seconds to click **Undo**) |
+| `list_tasks` | Google Tasks due in a range, plus overdue ones, optionally undated ones |
+| `create_task` / `update_task` | add a task; rename, move its due date, edit notes, mark done or not done |
+| `delete_task` | delete a task (with **Undo**) |
+| `find_free_time` | open time in your working hours, after events, meeting buffers and lunch, worked out by the app |
 
 The model decides which tools to call, the app runs them with your Google sign-in, and the model writes
 the answer. Every change shows up as a small card under the reply.
@@ -38,6 +42,42 @@ Two kinds of API are supported (see `src/main/assistant.js`):
 - **Claude** uses the Anthropic SDK (Messages API).
 - **Everything else** uses the OpenAI-compatible `POST {server}/chat/completions` format with `tools`,
   which nearly every provider and local server now offers.
+
+## Planning tasks into time blocks
+
+Ask things like **"plan my week"**, **"schedule my tasks for tomorrow"** or **"find 2 hours for the essay before Friday"**.
+The assistant looks up your tasks and your free time in one step, then fits the tasks in:
+
+- demanding work in your best focus time, blocks of your usual length (never longer than your maximum), breaks between them;
+- nothing outside your working hours unless you ask; overdue tasks first; everything before its due date.
+
+When the plan has two or more blocks, it **shows the plan and asks first**; say "yes" (or ask for changes) and it creates
+them. Blocks are linked to their task (you'll see "Time block for task: …" in the event) and use the color you picked.
+Scheduling a task doesn't tick it off; tell the assistant or tick it yourself when you're done.
+
+### About you
+
+Settings → Assistant → **About you**: working days and hours, lunch, best focus time, block length, longest block, break
+between blocks, buffer around meetings, block color, and a free-text box for anything else ("no work after 9pm", "gym
+Mon/Wed/Fri at 6pm"). The fields drive the free-time arithmetic; everything is also given to the model.
+
+This is **context in the prompt, not RAG**: the profile is small, so it's simply part of the system prompt, cached with
+the rest. Nothing is retrieved or embedded, and nothing gets missed. It's sent to your AI provider with each message,
+so don't put anything there you wouldn't want them to see.
+
+## Cost
+
+Measured numbers are in **[COST.md](COST.md)** (`.\scripts\bench.ps1` re-runs the benchmark). What keeps it low:
+
+- **Prompt caching.** For Claude, the tools and system prompt are cached, and earlier turns too, so the assistant's
+  follow-up requests within a message cost a fraction. For other providers, the request always starts with the same
+  bytes (system prompt, then tools), which lets OpenAI, Gemini and others apply their automatic caching.
+- **`find_free_time`** does the scheduling arithmetic in the app.
+- **Compact tool results** with short ids (`c1`, `l1`) instead of long Google ids.
+- **Bounded chats**: after 30 idle minutes or 20 messages the next message starts a fresh conversation.
+
+Settings → Assistant → **Cost** shows what your messages cost this month (for Claude; other providers show token counts
+unless you add their prices to `providers.js`).
 
 ## Which provider should I pick?
 
@@ -178,8 +218,9 @@ Never put a key in a file inside the project folder. If you do use a `.env` file
 ## Privacy
 
 What the provider receives with each message: your message, the assistant's instructions (including your
-time zone), and the results of the tools it calls, which means **event titles, times, locations and
-calendar names** for the days it looked at. Your Google sign-in and API keys are never sent to the provider.
+time zone and your **About you** profile), and the results of the tools it calls, which means **event and task titles,
+times, locations, task notes and calendar names** for the days it looked at. Your Google sign-in and API keys are never
+sent to the provider.
 
 - Hosted providers process that data under their own terms. Read them, especially for free tiers.
 - Local providers (Ollama, LM Studio) keep everything on your PC.

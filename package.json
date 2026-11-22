@@ -11,7 +11,9 @@
     "start": "electron .",
     "dist": "electron-builder --win",
     "icons": "electron scripts/make-icons.js",
-    "icons:copy": "node scripts/copy-icons.js"
+    "icons:copy": "node scripts/copy-icons.js",
+    "test": "node --test \"test/unit/*.test.js\" && electron test/electron/run.js",
+    "bench": "electron scripts/bench-assistant.js"
   },
   "build": {
     "appId": "com.local.deskcalendar",
@@ -32,6 +34,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^1.8.0",
     "@googleapis/calendar": "^20.2.0",
+    "@googleapis/tasks": "^18.0.0",
     "chrono-node": "^2.10.3",
     "google-auth-library": "^11.3.4"
   },

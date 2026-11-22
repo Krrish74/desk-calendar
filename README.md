@@ -12,8 +12,13 @@ change your schedule. Built with Electron. Bring your own Google Cloud project a
 - **Click an empty slot to create**, **drag to move**, **drag the bottom edge to resize**, click an event for details
 - **Quick add** in plain English: `gym tomorrow 6pm`, `lunch w/ Sam fri 12:30-2pm #personal`, `standup 9am for 15 min`
 - **Countdown** to your next event, with a **Join** button for Meet / Zoom / Teams links
+- **Google Tasks**: "Today's tasks" in the sidebar (unfinished ones from earlier days show as Overdue), tasks in the
+  Agenda view, an "Add a task" box that understands dates (`call mom friday`), tick to complete, Undo on delete
 - Full editor with **color**, **notifications** (reminders) and **Google Meet**
-- **Assistant** side panel: "move gym to 7pm", "what's on Friday?", "delete my 3pm" (with Undo)
+- **Assistant** side panel: "move gym to 7pm", "what's on Friday?", "delete my 3pm" (with Undo), and
+  **"plan my week"**: it turns your tasks into time blocks around your events, following an **About you** profile
+  (working hours, focus time, block length, breaks). It shows the plan first and creates the blocks when you agree.
+  About $0.001 a message on Claude Haiku: see **[docs/COST.md](docs/COST.md)**
 - **Desktop notifications** before events, **tray icon**, **Ctrl+Shift+Space** to show/hide, **starts with Windows**
 - **Mica** background, Fluent icons, keyboard shortcuts (D / W / M / A views, T today, J / K previous/next, C create)
 - **Your secrets stay on your PC**: Google sign-in and API keys are encrypted with your Windows account (DPAPI)
@@ -44,11 +49,24 @@ npm start
 Then:
 
 1. Follow **[SETUP-GOOGLE.md](SETUP-GOOGLE.md)** once to get your `credentials.json`.
-2. In the app, click **Load credentials.json…**, then **Sign in with Google**.
+2. In the app, click **Load credentials.json…**, then **Sign in with Google** (allow both Calendar and Tasks).
 3. Optional: open **Settings → Assistant**, pick a provider and paste its API key
    (see **[docs/ASSISTANT.md](docs/ASSISTANT.md)**).
 
 Something not working? See **[docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)**.
+
+## Tests
+
+```powershell
+npm test
+```
+
+Runs the unit tests (free-time arithmetic) with Node's test runner, then the app tests in Electron: the assistant
+against mock Claude / OpenAI-compatible servers (caching markers, task tools, plan-then-confirm, short ids, cost
+tracking) and the UI in a real window with a stubbed Google account. Nothing touches your real calendar, settings or keys.
+
+`.\scripts\bench.ps1` runs the **live cost benchmark**: real Claude Haiku 5.5 requests against a made-up week, a few
+cents in total, results written to [docs/COST.md](docs/COST.md).
 
 ## Build the installer
 
@@ -68,8 +86,11 @@ Start with Windows only takes effect in the installed app.
 
 ![Settings → Assistant](docs/screenshots/settings-assistant.png)
 
-Pick a provider in **Settings → Assistant**. The assistant gets five tools (list calendars, list events,
-create, update, delete) and calls them itself; you see a card for every change, and deletes can be undone.
+![Tasks in the sidebar and Agenda (sample data)](docs/screenshots/agenda-tasks.png)
+
+Pick a provider in **Settings → Assistant**. The assistant gets ten tools (calendars, events, tasks and a free-time
+finder) and calls them itself; you see a card for every change, and deletes can be undone. Fill in **About you** in the
+same page so it plans around how you actually work.
 
 | Provider | Cost | Notes |
 |---|---|---|
@@ -96,9 +117,11 @@ src/
 │  ├─ auth.js             Google OAuth (loopback + PKCE), token refresh
 │  ├─ secureStore.js      encrypts tokens/keys with Windows DPAPI (Electron safeStorage)
 │  ├─ calendar.js         Calendar API: calendars, events, create/update/delete, colors, reminders, Meet
+│  ├─ tasks.js            Google Tasks API: lists, tasks due/overdue/undated, add, complete, delete
+│  ├─ freetime.js         working-hours free time for the assistant (pure functions, unit-tested)
 │  ├─ quickadd.js         "gym tomorrow 6pm #work" → {title, start, end, calendar} using chrono-node
 │  ├─ providers.js        the AI providers the assistant can use (add your own here)
-│  └─ assistant.js        assistant: tool definitions + the tool-use loop (Claude and OpenAI-compatible)
+│  └─ assistant.js        assistant: tools, profile prompt, caching, cost tracking, the tool-use loop
 ├─ preload.js             the bridge: exposes window.desk.* to the page, nothing else
 ├─ assets/                app icon (icon.svg is the source) + Fluent UI icons (MIT)
 └─ renderer/              ← FRONTEND (sandboxed web page). No Node, no secrets.
@@ -114,15 +137,18 @@ src/
       ├─ views.js         toolbar, picking the view, Agenda view
       ├─ interactions.js  click/drag to create, move, resize; details popover; undo toast
       ├─ editor.js        full event editor (color, notifications, Meet)
+      ├─ tasks.js         "Today's tasks", tasks in the Agenda, task details and editor
       ├─ chat.js          assistant side panel
       ├─ settings.js      settings page
       └─ app.js           startup, sign-in screen, keyboard shortcuts, timers
 docs/
-├─ ASSISTANT.md           choosing and setting up an AI provider
+├─ ASSISTANT.md           choosing and setting up an AI provider, planning with tasks
+├─ COST.md                measured cost per message (from scripts/bench-assistant.js)
 ├─ TROUBLESHOOTING.md     common problems and fixes
 ├─ UI-SPEC.md, ui/        design history: the original UI spec and questionnaire (older screenshots)
 └─ screenshots/           README images (made-up sample data)
-scripts/                  icon generation (npm run icons, npm run icons:copy)
+scripts/                  icons, the cost benchmark (bench.ps1 → bench-assistant.js)
+test/                     unit/ (node --test) and electron/run.js (assistant + UI tests)
 build/icon.ico            installer icon
 ```
 
@@ -136,7 +162,7 @@ How a drag flows: `interactions.js` calls `desk.updateEvent(...)` → `preload.j
 | `credentials.json` (your OAuth client) | `%APPDATA%\desk-calendar\` (dev) or `%APPDATA%\Desk Calendar\` (installed) | Outside the repo; `.gitignore` blocks it if you put one in the project |
 | Google access/refresh token | same folder, `google-token.bin` | Encrypted with DPAPI, tied to your Windows account |
 | AI API keys | same folder, `anthropic-key.bin`, `assistant-key-<provider>.bin` | Encrypted with DPAPI |
-| Preferences, window position | same folder, `prefs.json`, `window.json` | Not secret (plain JSON, no keys) |
+| Preferences, your "About you" profile, window position | same folder, `prefs.json`, `window.json` | Not secret (plain JSON, no keys) |
 
 Nothing secret is ever written in plain text, and none of it is inside the project folder.
 Settings → Account → **Sign out** deletes the Google token and revokes it with Google.
@@ -159,6 +185,8 @@ Most everyday options are in the app's **Settings** page. For deeper changes:
 | Suggestion chips in the assistant | `SUGGESTIONS` in `src/renderer/js/chat.js` |
 | Add an AI provider or change a default model | `PROVIDERS` in `src/main/providers.js` |
 | Claude models, prices, effort | `MODELS` in `src/main/assistant.js` |
+| How long a chat lasts before starting fresh | `IDLE_RESET_MS`, `MAX_USER_TURNS` in `src/main/assistant.js` |
+| Default "About you" values | `PROFILE_DEFAULTS` in `src/main/freetime.js` |
 | Assistant behavior/tone | `SYSTEM` prompt in `src/main/assistant.js` |
 | Give the assistant a new ability | add an entry to `TOOLS` and a `case` in `runTool()` in `assistant.js` (works for every provider) |
 | Add an icon | add its name to `ICONS` in `scripts/copy-icons.js`, then `npm run icons:copy` |
@@ -168,6 +196,8 @@ Most everyday options are in the app's **Settings** page. For deeper changes:
 
 - **Testing-mode sign-in lasts 7 days.** See the end of SETUP-GOOGLE.md for how to avoid it.
 - Editing or dragging a recurring event changes **only that occurrence**.
+- **Tasks are date-only.** Google's Tasks API doesn't expose the time you can give a task in Google Calendar, so
+  tasks appear in the sidebar and Agenda, not in the hour grid. Moving a task to another list isn't supported by the API.
 - Events you've declined are hidden, like in Google Calendar.
 - Deleting shows **"Event deleted · Undo"** for 6 seconds before it's really deleted. Quitting from the
   tray finishes pending deletes; killing the process (Ctrl+C in a terminal) within those 6 seconds cancels them.

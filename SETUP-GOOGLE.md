@@ -22,10 +22,12 @@ under your control.
 5. Click **Create**, wait a few seconds, then select the new project in the
    project picker. Check that the top bar shows **Desk Calendar** before you continue.
 
-## 2. Enable the Google Calendar API
+## 2. Enable the Google Calendar API and the Google Tasks API
 
 1. Left menu ☰ → **APIs & Services** → **Library**.
 2. Search for **Google Calendar API**, open it and click **Enable**.
+3. Go back to the Library, search for **Google Tasks API**, open it and click **Enable**
+   (for "Today's tasks" and the assistant's task tools).
 
 APIs are off by default for every project. Without this step, every call
 returns `403 accessNotConfigured`.
@@ -50,7 +52,9 @@ your Google Account".
 2. Filter for "calendar" and tick these two:
    - `.../auth/calendar.readonly`: see your calendar list, colors and events
    - `.../auth/calendar.events`: create, edit and delete events
-3. Click **Update**, then **Save**.
+3. Clear the filter, filter for "tasks" and tick:
+   - `.../auth/tasks`: see, add, complete and delete your Google Tasks
+4. Click **Update**, then **Save**.
 
 ### Add yourself as a test user
 
@@ -93,6 +97,12 @@ Anyone else gets "Access blocked". That's what you want for a personal app.
    expected for Testing mode. Click **Continue**.
 3. Allow both calendar permissions. The browser tab says "Signed in. You can
    close this tab", and the app loads your events.
+
+## Already signed in from an older version?
+
+Desk Calendar now also asks for Google Tasks. If you signed in before that, the sidebar shows
+**Connect Google Tasks**: enable the Google Tasks API (step 2), add the tasks scope (step 3), then click
+that button and allow access. Your calendar keeps working the whole time.
 
 ## Things to know about Testing mode
 

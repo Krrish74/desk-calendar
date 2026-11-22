@@ -662,3 +662,77 @@ html:not(.mica) .sp-content { background: #13161b; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition: none !important; animation: none !important; }
 }
+
+/* ============================================================== Tasks (tasks.js) */
+
+#today-tasks { display: flex; flex-direction: column; gap: 2px; }
+.tt-head { display: flex; align-items: center; justify-content: space-between; margin: 4px 0 2px 4px; }
+.tt-head h2 { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; margin: 0; }
+.tt-head h2 .ico { width: 16px; height: 16px; color: var(--accent); }
+.tt-count { font-size: var(--fs-small); color: var(--muted); padding-right: 6px; }
+#tt-list, #tt-done { list-style: none; margin: 0; padding: 0; }
+#tt-done { opacity: .75; }
+.tt-empty { color: var(--muted); font-size: var(--fs-small); padding: 4px 8px; }
+#tt-connect { padding: 6px 4px; }
+#tt-connect p { margin: 0 0 8px; font-size: var(--fs-small); }
+#tt-add { display: flex; align-items: center; gap: 6px; padding: 0 4px 0 8px; color: var(--muted); }
+#tt-add .ico { width: 16px; height: 16px; flex-shrink: 0; }
+#tt-add input { height: 30px; border-color: transparent; background: transparent; padding: 0 4px; }
+#tt-add input:hover { background: var(--surface); }
+#tt-add input:focus { background: var(--surface); border-color: var(--border); border-bottom-color: var(--accent); }
+#tt-preview { font-size: var(--fs-small); color: var(--now); padding: 0 8px 2px 30px; }
+.link-btn {
+  align-self: flex-start; background: none; border: 0; padding: 4px 8px; color: var(--muted);
+  font: inherit; font-size: var(--fs-small); cursor: pointer; border-radius: var(--radius-ctl);
+}
+.link-btn:hover { color: var(--text); background: var(--surface-2); }
+
+.task-row {
+  display: flex; align-items: flex-start; gap: 4px; border-radius: 6px;
+  transition: opacity var(--fast), background var(--fast);
+}
+.task-row:hover { background: var(--surface-2); }
+.task-check {
+  flex-shrink: 0; width: 30px; height: 30px; display: grid; place-items: center;
+  background: none; border: 0; border-radius: 50%; color: var(--muted); cursor: pointer;
+}
+.task-check .ico { width: 18px; height: 18px; }
+.task-check:hover { color: var(--accent); }
+.task-row.done .task-check { color: var(--accent); }
+.task-text {
+  flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 1px;
+  background: none; border: 0; padding: 6px 6px 6px 0; color: var(--text); font: inherit; text-align: left; cursor: pointer;
+}
+.task-title { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.task-meta { font-size: var(--fs-small); color: var(--muted); }
+.task-row.overdue .task-meta { color: var(--danger); }
+.task-row.done .task-title { text-decoration: line-through; color: var(--muted); }
+.task-row.done .task-meta { display: none; }
+
+.ag-tasks { display: flex; flex-direction: column; padding: 2px 4px 4px; }
+.ag-tasks .task-row { padding-left: 2px; }
+
+.task-details .dt-task-ico { width: 20px; height: 20px; color: var(--accent); margin-top: 3px; flex-shrink: 0; }
+.dt-buttons { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.dt-buttons .btn .ico { width: 16px; height: 16px; margin-right: 6px; }
+dialog label.row.nodate { margin-top: 20px; }
+
+/* Settings → Assistant → About you */
+.day-picks { display: flex; gap: 4px; flex-shrink: 0; }
+.day-pick {
+  width: 44px; height: 30px; border-radius: var(--radius-ctl); border: 1px solid var(--border);
+  background: var(--surface); color: var(--muted); font: inherit; font-size: var(--fs-small); cursor: pointer;
+}
+.day-pick.on { background: color-mix(in srgb, var(--accent) 25%, var(--surface-2)); color: var(--text); border-color: var(--accent); }
+.srow-inline.times { align-items: center; color: var(--muted); }
+.srow-inline.times input { width: 120px; }
+.srow-inline.nums input, .srow input.num { width: 76px; flex-shrink: 0; }
+.srow.column { flex-direction: column; align-items: stretch; gap: 8px; }
+.srow.column textarea { width: 100%; }
+.srow-desc.right { text-align: right; margin-top: -4px; }
+
+/* Assistant: "New conversation" marker */
+.chat-divider {
+  align-self: stretch; text-align: center; font-size: var(--fs-caption); color: var(--muted);
+  border-top: 1px solid var(--border); padding-top: 6px; margin-top: 4px;
+}

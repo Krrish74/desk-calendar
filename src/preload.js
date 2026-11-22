@@ -30,6 +30,16 @@ contextBridge.exposeInMainWorld('desk', {
   // quick add
   parseQuick: call('quick:parse'),
   quickAdd: call('quick:add'),
+  // Google Tasks
+  tasksStatus: call('tasks:status'),
+  connectTasks: call('tasks:connect'),
+  getTaskLists: call('tasks:lists'),
+  setTaskListVisible: call('tasks:setListVisible'),
+  getTasks: call('tasks:list'),
+  createTask: call('tasks:create'),
+  updateTask: call('tasks:update'),
+  deleteTaskLater: call('tasks:deleteLater'),
+  parseTask: call('tasks:parse'),
   // chatbot
   chatSend: call('chat:send'),
   chatReset: call('chat:reset'),

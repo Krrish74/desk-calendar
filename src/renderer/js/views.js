@@ -97,6 +97,8 @@ function renderAgenda() {
     label.onclick = () => { state.anchor = startOfDay(d); setView('day'); };
 
     const body = el('div', 'ag-body');
+    const dayTasks = agendaTasksFor(d); // tasks first, like Google Calendar
+    if (dayTasks.length) body.append(agendaTaskList(dayTasks));
     if (allDay.length) {
       const chips = el('div', 'allday-chips');
       for (const ev of allDay) chips.append(eventChip(ev));
@@ -116,7 +118,7 @@ function renderAgenda() {
     }
 
     for (const ev of timed) body.append(agendaRow(ev, now));
-    if (!items.length) body.append(el('div', 'empty', 'Nothing scheduled'));
+    if (!items.length && !dayTasks.length) body.append(el('div', 'empty', 'Nothing scheduled'));
 
     section.append(label, body);
     list.append(section);
