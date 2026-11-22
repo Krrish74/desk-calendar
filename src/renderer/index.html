@@ -1,0 +1,363 @@
+<!doctype html>
+<!--
+  index.html: the window's layout.
+
+  ┌ #titlebar ─ app icon + name ─────────────────────── pin │ (Windows' – ▢ ✕) ┐
+  ├ #toolbar ── ☰ Today ‹ › range label ─────── ⟳ [Day|Week|Month|Agenda] 💬 ⚙ ┤
+  ├ #sidebar ──────┬ #view (the calendar) ─────────────────────┬ #chat (panel) ┤
+  │ countdown      │                                           │               │
+  │ + Create       │                                           │               │
+  │ quick add      │                                           │               │
+  │ mini month     │                                           │               │
+  │ My calendars   │                                           │               │
+  ├────────────────┴───────────────────────────────────────────┴───────────────┤
+  └ #status ───────────────────────────────────────────────────────────────────┘
+
+  Plus #setup (first run / signed out) and the dialogs at the bottom.
+  Behavior: the scripts listed at the end (one per area). Looks: styles.css + icons.css.
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <!-- Content-Security-Policy: the page may only load its own files. No remote
+       scripts, no inline <script> or style="" attributes. -->
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:;" />
+  <title>Desk Calendar</title>
+  <link rel="stylesheet" href="icons.css" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <!-- Title bar ------------------------------------------------------------>
+  <header id="titlebar">
+    <div class="app-title">
+      <img src="../assets/icon-32.png" alt="" />
+      <span>Desk Calendar</span>
+    </div>
+    <div class="titlebar-buttons">
+      <button id="btn-pin" class="icon" title="Keep on top"><i class="ico i-pin"></i></button>
+    </div>
+    <!-- Minimize / maximize / close are drawn by Windows itself, to the right of this bar. -->
+  </header>
+
+  <!-- First-run setup ------------------------------------------------------->
+  <section id="setup" hidden>
+    <div class="setup-card">
+      <img src="../assets/icon-64.png" alt="" class="setup-logo" />
+      <h1>Welcome 👋</h1>
+      <div id="setup-creds" class="step">
+        <p><b>Step 1.</b> Load the <code>credentials.json</code> you downloaded from Google Cloud Console
+          (see <code>SETUP-GOOGLE.md</code>).</p>
+        <button id="btn-load-creds" class="btn primary">Load credentials.json…</button>
+      </div>
+      <div id="setup-signin" class="step">
+        <p><b>Step 2.</b> Sign in. Your browser will open Google's sign-in page.</p>
+        <button id="btn-signin" class="btn primary">Sign in with Google</button>
+      </div>
+      <p id="setup-msg" class="muted"></p>
+    </div>
+  </section>
+
+  <!-- The app (shown once signed in) ---------------------------------------->
+  <div id="app" hidden>
+    <nav id="toolbar">
+      <button id="btn-sidebar" class="icon" title="Show/hide side panel"><i class="ico i-navigation"></i></button>
+      <button id="btn-today" class="btn">Today</button>
+      <div class="nav-arrows">
+        <button id="btn-prev" class="icon" title="Previous (K)"><i class="ico i-chevron_left"></i></button>
+        <button id="btn-next" class="icon" title="Next (J)"><i class="ico i-chevron_right"></i></button>
+      </div>
+      <h1 id="range-label"></h1>
+      <span class="spacer"></span>
+      <button id="btn-refresh" class="icon" title="Refresh"><i class="ico i-arrow_sync"></i></button>
+      <div id="view-switch" class="segmented" role="tablist">
+        <button data-view="day" title="Day (D)">Day</button>
+        <button data-view="week" title="Week (W)">Week</button>
+        <button data-view="month" title="Month (M)">Month</button>
+        <button data-view="agenda" title="Agenda (A)">Agenda</button>
+      </div>
+      <button id="btn-chat" class="icon" title="Assistant"><i class="ico i-chat"></i></button>
+      <button id="btn-settings" class="icon" title="Settings"><i class="ico i-settings"></i></button>
+    </nav>
+
+    <div id="workspace">
+      <!-- Sidebar --------------------------------------------------------->
+      <aside id="sidebar">
+        <section id="countdown" class="card">
+          <div id="cd-label" class="cd-label">Next</div>
+          <div id="cd-title" class="cd-title"></div>
+          <div id="cd-location" class="cd-location" hidden><i class="ico i-location"></i><span></span></div>
+          <div class="cd-row">
+            <span id="cd-time" class="cd-time"></span>
+            <button id="cd-join" class="btn join" hidden><i class="ico i-video"></i>Join</button>
+          </div>
+          <div id="cd-progress" class="progress" hidden><div id="cd-progress-bar"></div></div>
+        </section>
+
+        <button id="btn-create" class="create-btn"><i class="ico i-add"></i>Create</button>
+
+        <form id="quick" autocomplete="off">
+          <input id="quick-input" placeholder='Quick add: "gym tomorrow 6pm #personal"' />
+        </form>
+        <div id="quick-preview" hidden></div>
+
+        <section id="minimonth">
+          <div class="mm-head">
+            <span id="mm-label"></span>
+            <button id="mm-prev" class="icon small" title="Previous month"><i class="ico i-chevron_left"></i></button>
+            <button id="mm-next" class="icon small" title="Next month"><i class="ico i-chevron_right"></i></button>
+          </div>
+          <div id="mm-grid"></div>
+        </section>
+
+        <section class="cal-group">
+          <h2>My calendars</h2>
+          <ul id="cal-mine"></ul>
+        </section>
+        <section class="cal-group" id="cal-other-group">
+          <h2>Other calendars</h2>
+          <ul id="cal-other"></ul>
+        </section>
+      </aside>
+
+      <!-- Calendar view (Day / Week / Month / Agenda) ----------------------->
+      <main id="view"></main>
+
+      <!-- Assistant ------------------------------------------------------->
+      <!-- Assistant: a right-side panel that slides in (class "open"); the calendar shrinks. -->
+      <aside id="chat" aria-label="Assistant">
+        <div class="chat-inner">
+          <div class="chat-head">
+            <span class="chat-title"><i class="ico i-sparkle"></i>Assistant</span>
+            <button id="btn-chat-reset" class="btn subtle small" title="Start a new conversation">New chat</button>
+            <button id="btn-chat-close" class="icon small" title="Close"><i class="ico i-dismiss"></i></button>
+          </div>
+          <div id="chat-log"></div>
+          <form id="chat-form" autocomplete="off">
+            <textarea id="chat-input" rows="2"
+              placeholder='Ask or tell me something, e.g. "move gym to 7pm"'></textarea>
+            <button class="icon" id="chat-send" title="Send (Enter)"><i class="ico i-send"></i></button>
+          </form>
+        </div>
+      </aside>
+    </div>
+
+    <!-- Settings page (replaces the toolbar + calendar while open) ------------>
+    <section id="settings-page" hidden>
+      <header class="sp-head">
+        <button id="sp-back" class="icon" title="Back to calendar (Esc)"><i class="ico i-arrow_left"></i></button>
+        <h1>Settings</h1>
+      </header>
+      <div class="sp-body">
+        <nav class="sp-nav">
+          <button data-sec="general" class="active"><i class="ico i-settings"></i>General</button>
+          <button data-sec="calendars"><i class="ico i-calendar_ltr"></i>Calendars</button>
+          <button data-sec="notifications"><i class="ico i-alert"></i>Notifications</button>
+          <button data-sec="assistant"><i class="ico i-sparkle"></i>Assistant</button>
+          <button data-sec="account"><i class="ico i-person"></i>Account</button>
+        </nav>
+
+        <div class="sp-content" id="sp-content">
+          <!-- General -->
+          <section id="sec-general" class="sp-section">
+            <h2>General</h2>
+            <div class="srow">
+              <div><div class="srow-title">Start in</div><div class="srow-desc">The view Desk Calendar opens with</div></div>
+              <select id="p-startView">
+                <option value="last">Last used view</option><option value="day">Day</option>
+                <option value="week">Week</option><option value="month">Month</option><option value="agenda">Agenda</option>
+              </select>
+            </div>
+            <div class="srow">
+              <div><div class="srow-title">Week starts on</div></div>
+              <select id="p-weekStartsOn"><option value="0">Sunday</option><option value="1">Monday</option></select>
+            </div>
+            <div class="srow">
+              <div><div class="srow-title">Agenda shows</div><div class="srow-desc">How many days the Agenda view lists</div></div>
+              <select id="p-agendaDays">
+                <option value="4">Today + next 3 days</option><option value="8">Today + next 7 days</option>
+                <option value="15">Today + next 14 days</option><option value="31">Today + next 30 days</option>
+              </select>
+            </div>
+            <div class="srow">
+              <div><div class="srow-title">Time format</div></div>
+              <select id="p-timeFormat">
+                <option value="system">Use Windows setting</option><option value="12">12-hour (6:00 PM)</option><option value="24">24-hour (18:00)</option>
+              </select>
+            </div>
+            <div class="srow">
+              <div><div class="srow-title">Default event length</div><div class="srow-desc">For quick add, click-to-create and new events</div></div>
+              <select id="p-defaultEventMinutes">
+                <option value="15">15 minutes</option><option value="30">30 minutes</option><option value="45">45 minutes</option>
+                <option value="60">1 hour</option><option value="90">1.5 hours</option><option value="120">2 hours</option>
+              </select>
+            </div>
+            <div class="srow">
+              <div><div class="srow-title">Default calendar for new events</div><div class="srow-desc">Quick add uses it unless you type a #calendar</div></div>
+              <select id="p-defaultCalendarId"></select>
+            </div>
+
+            <h3>Background</h3>
+            <div class="srow">
+              <div><div class="srow-title">Start with Windows</div>
+                <div class="srow-desc" id="s-startup-note">Only applies to the installed app, not while running with <code>npm start</code>.</div></div>
+              <input type="checkbox" class="toggle" id="s-startup" />
+            </div>
+            <div class="srow">
+              <div><div class="srow-title">Start hidden in the tray</div><div class="srow-desc">When Desk Calendar starts with Windows</div></div>
+              <input type="checkbox" class="toggle" id="s-start-hidden" />
+            </div>
+            <div class="srow">
+              <div><div class="srow-title">Show/hide shortcut</div><div class="srow-desc" id="s-hotkey-msg">Works from any app. Click the box, then press new keys.</div></div>
+              <input id="s-hotkey" readonly title="Click, then press the new shortcut" />
+            </div>
+          </section>
+
+          <!-- Calendars -->
+          <section id="sec-calendars" class="sp-section">
+            <h2>Calendars</h2>
+            <p class="muted">Choose which calendars Desk Calendar shows. This doesn't change Google Calendar itself.</p>
+            <div id="sp-cal-list"></div>
+          </section>
+
+          <!-- Notifications -->
+          <section id="sec-notifications" class="sp-section">
+            <h2>Notifications</h2>
+            <div class="srow">
+              <div><div class="srow-title">Desktop notifications before events</div>
+                <div class="srow-desc">Silent Windows notifications, also while Desk Calendar is in the tray. All-day and declined events are skipped.</div></div>
+              <input type="checkbox" class="toggle" id="p-notifyEnabled" />
+            </div>
+            <div class="srow">
+              <div><div class="srow-title">When</div></div>
+              <select id="p-notifyMinutes">
+                <option value="0">At start time</option><option value="1">1 minute before</option>
+                <option value="5">5 minutes before</option><option value="10">10 minutes before</option>
+                <option value="15">15 minutes before</option><option value="30">30 minutes before</option>
+                <option value="60">1 hour before</option>
+              </select>
+            </div>
+            <div class="srow">
+              <div><div class="srow-title">Try it</div>
+                <div class="srow-desc" id="s-notify-note">If nothing appears, check Windows Settings → System → Notifications (and Do not disturb).</div></div>
+              <button type="button" id="btn-notify-test" class="btn">Send a test notification</button>
+            </div>
+          </section>
+
+          <!-- Assistant -->
+          <section id="sec-assistant" class="sp-section">
+            <h2>Assistant</h2>
+            <p class="muted">Pick any AI service you like. Claude works best with the calendar tools; Gemini and Groq have free tiers; Ollama runs on your own PC for free. Changing anything here starts a new chat.</p>
+            <div class="srow">
+              <div><div class="srow-title">Provider</div>
+                <div class="srow-desc" id="s-provider-note"></div></div>
+              <select id="s-provider" class="wide"></select>
+            </div>
+            <div class="srow" id="row-claude-model">
+              <div><div class="srow-title">Model</div>
+                <div class="srow-desc">Haiku is fast and very cheap; try Sonnet or Opus if it gets something wrong.</div></div>
+              <select id="p-assistantModel" class="wide"></select>
+            </div>
+            <div class="srow" id="row-model">
+              <div><div class="srow-title">Model</div>
+                <div class="srow-desc" id="s-model-msg">Its id, exactly as the provider writes it. It must support tool (function) calling.</div></div>
+              <div class="srow-inline">
+                <input id="s-model" list="s-model-list" spellcheck="false" autocomplete="off" />
+                <datalist id="s-model-list"></datalist>
+                <button type="button" id="btn-load-models" class="btn">Load models</button>
+              </div>
+            </div>
+            <div class="srow" id="row-baseurl">
+              <div><div class="srow-title">Server address</div>
+                <div class="srow-desc">The API root (requests go to …/chat/completions). Leave the default unless you know you need another.</div></div>
+              <input id="s-baseurl" class="wide" spellcheck="false" autocomplete="off" placeholder="https://example.com/v1" />
+            </div>
+            <div class="srow" id="row-key">
+              <div><div class="srow-title" id="s-key-title">API key</div>
+                <div class="srow-desc"><span id="s-key-status"></span> <button type="button" id="s-key-link" class="text-link" hidden>Get a key</button></div></div>
+              <div class="srow-inline">
+                <input type="password" id="s-key" autocomplete="off" />
+                <button type="button" id="btn-save-key" class="btn primary">Save</button>
+              </div>
+            </div>
+          </section>
+
+          <!-- Account -->
+          <section id="sec-account" class="sp-section">
+            <h2>Account</h2>
+            <div class="srow">
+              <div><div class="srow-title">Google account</div><div class="srow-desc" id="s-account">…</div></div>
+              <button type="button" id="btn-signout" class="btn danger">Sign out</button>
+            </div>
+            <div class="srow">
+              <div><div class="srow-title">Google OAuth client</div><div class="srow-desc">The credentials.json from Google Cloud Console</div></div>
+              <button type="button" id="btn-replace-creds" class="btn">Replace credentials.json…</button>
+            </div>
+            <div class="srow">
+              <div><div class="srow-title">Your data</div>
+                <div class="srow-desc">Your Google sign-in and AI API keys are encrypted with your Windows account and stored in %APPDATA%. Nothing is stored in the project folder.</div></div>
+            </div>
+          </section>
+        </div>
+      </div>
+    </section>
+
+    <footer id="status" class="muted"></footer>
+  </div>
+
+  <!-- Event editor ---------------------------------------------------------->
+  <dialog id="editor">
+    <form id="editor-form" method="dialog">
+      <h2 id="editor-heading">Event</h2>
+      <div class="ed-body">
+        <p id="editor-readonly" class="muted" hidden>View only: you can't edit this calendar.</p>
+        <label>Title <input id="f-title" required /></label>
+        <label class="row"><input type="checkbox" id="f-allday" /> All day</label>
+        <div class="grid2">
+          <label>Start date <input type="date" id="f-sdate" required /></label>
+          <label class="time">Start time <input type="time" id="f-stime" /></label>
+          <label>End date <input type="date" id="f-edate" required /></label>
+          <label class="time">End time <input type="time" id="f-etime" /></label>
+        </div>
+        <label>Calendar <select id="f-calendar"></select></label>
+
+        <div class="ed-field">
+          <span class="ed-label"><i class="ico i-color"></i>Color</span>
+          <div id="f-colors" class="swatches"></div>
+        </div>
+        <div class="ed-field">
+          <span class="ed-label"><i class="ico i-video"></i>Video call</span>
+          <div id="f-meet" class="ed-meet"></div>
+        </div>
+        <div class="ed-field">
+          <span class="ed-label"><i class="ico i-alert"></i>Notifications</span>
+          <div id="f-reminders" class="ed-reminders"></div>
+        </div>
+
+        <label>Location <input id="f-location" /></label>
+        <label>Notes <textarea id="f-desc" rows="3"></textarea></label>
+      </div>
+      <div class="dialog-buttons">
+        <button type="button" id="btn-delete" class="btn danger">Delete</button>
+        <span class="spacer"></span>
+        <button type="button" id="btn-open-google" class="btn subtle">Open in Google</button>
+        <button type="button" id="btn-cancel" class="btn">Cancel</button>
+        <button type="submit" id="btn-save" class="btn primary">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Scripts: plain (non-module) files that share globals, loaded in this order. -->
+  <script src="js/util.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/sidebar.js"></script>
+  <script src="js/view-time.js"></script>
+  <script src="js/view-month.js"></script>
+  <script src="js/views.js"></script>
+  <script src="js/interactions.js"></script>
+  <script src="js/editor.js"></script>
+  <script src="js/chat.js"></script>
+  <script src="js/settings.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

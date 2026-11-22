@@ -1,0 +1,29 @@
+# --- Secrets: never commit these -----------------------------------------
+# Google OAuth client file downloaded from Cloud Console
+credentials.json
+client_secret*.json
+# Any token / key files, in case one ever lands in the project folder
+token*.json
+*.token
+*.bin
+.env
+.env.*
+
+# --- Build output and dependencies ----------------------------------------
+node_modules/
+dist/
+out/
+
+# --- OS / editor clutter ---------------------------------------------------
+.DS_Store
+Thumbs.db
+.vscode/
+*.log
+
+# --- iPhone app (worker/ + mobile/) ------------------------------------------
+# Wrangler's local secrets file and its local state (local D1 database, caches)
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
+.wrangler/
+worker/node_modules/

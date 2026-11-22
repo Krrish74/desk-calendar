@@ -1,0 +1,28 @@
+<!-- Desk Calendar app icon. Source of truth: edit this, then run `npm run icons`
+     to regenerate the PNGs (tray/title bar) and build/icon.ico (installer/exe). -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#8fb2ff"/>
+      <stop offset="1" stop-color="#5d86f0"/>
+    </linearGradient>
+  </defs>
+  <!-- tile -->
+  <rect x="16" y="16" width="224" height="224" rx="52" fill="url(#g)"/>
+  <!-- calendar page -->
+  <rect x="58" y="70" width="140" height="124" rx="22" fill="#0f1115"/>
+  <!-- header band -->
+  <path d="M58 92a22 22 0 0 1 22-22h96a22 22 0 0 1 22 22v14H58z" fill="#e6e8ee"/>
+  <!-- binding rings -->
+  <rect x="88" y="54" width="16" height="34" rx="8" fill="#e6e8ee"/>
+  <rect x="152" y="54" width="16" height="34" rx="8" fill="#e6e8ee"/>
+  <!-- day grid: one highlighted day -->
+  <g fill="#3a4152">
+    <rect x="80" y="124" width="22" height="20" rx="5"/>
+    <rect x="117" y="124" width="22" height="20" rx="5"/>
+    <rect x="80" y="156" width="22" height="20" rx="5"/>
+    <rect x="117" y="156" width="22" height="20" rx="5"/>
+    <rect x="154" y="156" width="22" height="20" rx="5"/>
+  </g>
+  <rect x="154" y="124" width="22" height="20" rx="5" fill="#7aa2ff"/>
+</svg>
