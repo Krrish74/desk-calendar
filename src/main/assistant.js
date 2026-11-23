@@ -75,7 +75,18 @@ const CHANGE_LIMIT = 3;
 const CONFIRMED_CHANGE_LIMIT = 25;
 // The user's own reply that approves what the assistant proposed (checked in code, so text
 // inside an event or task can never approve anything).
-const AFFIRMATIVE = /^\s*(yes|yeah|yep|y|ok|okay|sure|confirm(ed)?|go ahead|do it|please do|sounds good)\b/i;
+const AFFIRMATIVE = /^\s*(yes|yeah|yep|yup|y|ok|okay|sure|confirm(ed)?|go ahead|do it|please do|sounds good)\b/i;
+// The whole reply has to be an approval ("yes", "ok go ahead", "yes, delete it"), not a "sure"
+// followed by a new request ("Sure, clear my Friday"): a new request gets the normal limits.
+const APPROVAL_WORDS = new Set(`yes yeah yep yup y ok okay sure confirm confirmed go ahead do it please
+  thanks thank you sounds looks good fine great perfect that's thats that is it's its let's lets right correct
+  and all of them those these both create add make book schedule delete remove cancel move update change
+  save proceed now them it`.split(/\s+/));
+function isApproval(text) {
+  if (!AFFIRMATIVE.test(text)) return false;
+  const words = String(text).toLowerCase().replace(/[’`]/g, "'").replace(/[^a-z' ]+/g, ' ').split(/\s+/).filter(Boolean);
+  return words.length <= 12 && words.every((w) => APPROVAL_WORDS.has(w));
+}
 
 // Prompt caching can be switched off for the cost benchmark (scripts/bench-assistant.js).
 let cachingEnabled = true;
@@ -585,13 +596,20 @@ function setSettings({ provider, model, baseUrl, profile } = {}) {
   return getSettings();
 }
 
-/** localhost, this machine, or a private-network address (10.x, 172.16–31.x, 192.168.x, *.local). */
+/**
+ * localhost, this machine, or a home/private-network address: 10.x, 172.16–31.x, 192.168.x,
+ * 169.254.x, Tailscale's 100.64–127.x, private IPv6 (fc00::/7, fe80::/10), a bare computer
+ * name such as "gaming-pc", or a local name (*.local, *.lan, *.home, *.home.arpa, *.internal, *.ts.net).
+ */
 function isLocalAddress(url) {
   let host;
-  try { host = new URL(url).hostname.replace(/^\[|\]$/g, ''); } catch { return false; }
-  return host === 'localhost' || host === '::1' || host.endsWith('.local') || host.endsWith('.localhost')
-    || /^127\./.test(host) || /^10\./.test(host) || /^192\.168\./.test(host)
-    || /^172\.(1[6-9]|2\d|3[01])\./.test(host);
+  try { host = new URL(url).hostname.toLowerCase().replace(/^\[|\]$/g, '').replace(/\.$/, ''); } catch { return false; }
+  if (host === 'localhost' || host === '::1') return true;
+  if (/^[a-z0-9-]+$/.test(host) && !/^\d+$/.test(host)) return true; // single-label name: only resolves on your network
+  if (/\.(local|localhost|lan|home|home\.arpa|internal|ts\.net)$/.test(host)) return true;
+  if (/^(127|10)\./.test(host) || /^192\.168\./.test(host) || /^169\.254\./.test(host)
+    || /^172\.(1[6-9]|2\d|3[01])\./.test(host) || /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./.test(host)) return true;
+  return /^f[cd][0-9a-f]{0,2}:/.test(host) || /^fe[89ab][0-9a-f]?:/.test(host);
 }
 
 /** "Load models": ask the server which models this key can use. */
@@ -719,7 +737,7 @@ async function sendNow(text, ctx) {
   const history = messages;
   const checkpoint = history.length;
   // A "yes" to a question the assistant just asked approves more changes this time.
-  const confirmed = awaitingConfirm && AFFIRMATIVE.test(text);
+  const confirmed = awaitingConfirm && isApproval(text);
   awaitingConfirm = false;
   const turn = {
     cfg, ctx, history, actions: [], checkpoint, usage: { ...ZERO }, requests: 0,
@@ -766,7 +784,12 @@ async function useTool(name, input, turn) {
   } else {
     // Count before running: tool calls run in parallel, so this keeps the limit exact.
     if (isChange) turn.changes++;
-    output = await runTool(name, input || {}, { ...turn.ctx, confirmed: turn.confirmed });
+    try {
+      output = await runTool(name, input || {}, { ...turn.ctx, confirmed: turn.confirmed });
+    } catch (err) {
+      if (isChange) turn.changes--; // a change that failed wasn't made: don't count it
+      throw err;
+    }
     if (output?.needs_confirmation && isChange) turn.changes--;
   }
   if (output?.needs_confirmation) {
