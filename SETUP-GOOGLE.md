@@ -67,7 +67,8 @@ Anyone else gets "Access blocked". That's what you want for a personal app.
 ## 4. Create the Desktop OAuth client and download the credentials
 
 1. Sidebar → **Clients** → **Create client**.
-2. Application type: **Desktop app**. Name: `Desk Calendar (Windows)`.
+2. Application type: **Desktop app**. Name: `Desk Calendar (desktop)`. The same client works for
+   the Windows and the Mac app, so if you use both, load the same `credentials.json` on each.
 3. Click **Create**.
 4. In the dialog that appears, click **Download JSON** right away. Google now
    shows the client secret only at creation time. If you miss it, delete
@@ -78,8 +79,9 @@ Anyone else gets "Access blocked". That's what you want for a personal app.
 
 - **Recommended:** run the app, click **Load credentials.json…** on the
   first-run screen, and pick the file. The app copies it into your private
-  app-data folder (`%APPDATA%\desk-calendar\`), so it's never inside the project.
-- **Developer shortcut:** drop it in the project root (`desk-calendar\credentials.json`).
+  app-data folder (`%APPDATA%\desk-calendar\` on Windows,
+  `~/Library/Application Support/desk-calendar/` on a Mac), so it's never inside the project.
+- **Developer shortcut:** drop it in the project root (`desk-calendar/credentials.json`).
   It's listed in `.gitignore` so git won't commit it, and it's excluded from
   the packaged installer.
 

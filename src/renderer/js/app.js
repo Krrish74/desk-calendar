@@ -1,7 +1,15 @@
 // app.js: startup, sign-in screen, title bar, keyboard shortcuts and timers (loaded last).
 
-// Mica (Windows 11): the backend loads us with ?mica=1, so the page goes see-through.
+// Mica (Windows 11) or vibrancy (Mac): the backend loads us with ?mica=1, so the page goes see-through.
 if (new URLSearchParams(location.search).get('mica') === '1') document.documentElement.classList.add('mica');
+
+// On a Mac: leave room for the red/yellow/green buttons, and use Mac wording. Elements with a
+// data-mac attribute swap their text for it (e.g. "Start with Windows" → "Open at login").
+if (IS_MAC) {
+  document.documentElement.classList.add('mac');
+  for (const el of document.querySelectorAll('[data-mac]')) el.textContent = el.dataset.mac;
+  desk.onFullscreen((on) => document.documentElement.classList.toggle('fullscreen', on));
+}
 
 // ============================================================================
 // Startup and sign-in

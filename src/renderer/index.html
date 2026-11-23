@@ -3,6 +3,7 @@
   index.html: the window's layout.
 
   ┌ #titlebar ─ app icon + name ─────────────────────── pin │ (Windows' – ▢ ✕) ┐
+    (on a Mac the red/yellow/green buttons sit at the left instead, before the app name)
   ├ #toolbar ── ☰ Today ‹ › range label ─────── ⟳ [Day|Week|Month|Agenda] 💬 ⚙ ┤
   ├ #sidebar ──────┬ #view (the calendar) ─────────────────────┬ #chat (panel) ┤
   │ countdown      │                                           │               │
@@ -37,7 +38,8 @@
     <div class="titlebar-buttons">
       <button id="btn-pin" class="icon" title="Keep on top"><i class="ico i-pin"></i></button>
     </div>
-    <!-- Minimize / maximize / close are drawn by Windows itself, to the right of this bar. -->
+    <!-- Minimize / maximize / close are drawn by Windows itself, to the right of this bar
+         (by macOS at its left, in the room styles.css leaves with html.mac). -->
   </header>
 
   <!-- First-run setup ------------------------------------------------------->
@@ -201,7 +203,7 @@
             <div class="srow">
               <div><div class="srow-title">Time format</div></div>
               <select id="p-timeFormat">
-                <option value="system">Use Windows setting</option><option value="12">12-hour (6:00 PM)</option><option value="24">24-hour (18:00)</option>
+                <option value="system">Use system setting</option><option value="12">12-hour (6:00 PM)</option><option value="24">24-hour (18:00)</option>
               </select>
             </div>
             <div class="srow">
@@ -222,12 +224,12 @@
 
             <h3>Background</h3>
             <div class="srow">
-              <div><div class="srow-title">Start with Windows</div>
+              <div><div class="srow-title" data-mac="Open at login">Start with Windows</div>
                 <div class="srow-desc" id="s-startup-note">Only applies to the installed app, not while running with <code>npm start</code>.</div></div>
               <input type="checkbox" class="toggle" id="s-startup" />
             </div>
             <div class="srow">
-              <div><div class="srow-title">Start hidden in the tray</div><div class="srow-desc">When Desk Calendar starts with Windows</div></div>
+              <div><div class="srow-title" data-mac="Start hidden in the menu bar">Start hidden in the tray</div><div class="srow-desc" data-mac="When Desk Calendar opens at login">When Desk Calendar starts with Windows</div></div>
               <input type="checkbox" class="toggle" id="s-start-hidden" />
             </div>
             <div class="srow">
@@ -251,7 +253,7 @@
             <h2>Notifications</h2>
             <div class="srow">
               <div><div class="srow-title">Desktop notifications before events</div>
-                <div class="srow-desc">Silent Windows notifications, also while Desk Calendar is in the tray. All-day and declined events are skipped.</div></div>
+                <div class="srow-desc" data-mac="Silent notifications, also while Desk Calendar is hidden in the menu bar. All-day and declined events are skipped.">Silent Windows notifications, also while Desk Calendar is in the tray. All-day and declined events are skipped.</div></div>
               <input type="checkbox" class="toggle" id="p-notifyEnabled" />
             </div>
             <div class="srow">
@@ -265,7 +267,7 @@
             </div>
             <div class="srow">
               <div><div class="srow-title">Try it</div>
-                <div class="srow-desc" id="s-notify-note">If nothing appears, check Windows Settings → System → Notifications (and Do not disturb).</div></div>
+                <div class="srow-desc" id="s-notify-note" data-mac="If nothing appears, check System Settings → Notifications → Desk Calendar (and Focus).">If nothing appears, check Windows Settings → System → Notifications (and Do not disturb).</div></div>
               <button type="button" id="btn-notify-test" class="btn">Send a test notification</button>
             </div>
           </section>
@@ -388,7 +390,7 @@
             </div>
             <div class="srow">
               <div><div class="srow-title">Your data</div>
-                <div class="srow-desc">Your Google sign-in and AI API keys are encrypted with your Windows account and stored in %APPDATA%. Nothing is stored in the project folder.</div></div>
+                <div class="srow-desc" data-mac="Your Google sign-in and AI API keys are encrypted with your Mac’s Keychain and stored in ~/Library/Application Support. Nothing is stored in the project folder.">Your Google sign-in and AI API keys are encrypted with your Windows account and stored in %APPDATA%. Nothing is stored in the project folder.</div></div>
             </div>
           </section>
         </div>

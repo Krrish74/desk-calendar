@@ -1,15 +1,17 @@
 {
   "name": "desk-calendar",
   "version": "1.0.0",
-  "description": "Dark, Windows 11-style Google Calendar desktop app with an AI assistant",
+  "description": "Dark Google Calendar desktop app for Windows and macOS, with an AI assistant",
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "main": "src/main/main.js",
   "private": true,
   "scripts": {
     "start": "electron .",
-    "dist": "electron-builder --win",
+    "dist": "electron-builder",
+    "dist:win": "electron-builder --win",
+    "dist:mac": "electron-builder --mac",
     "icons": "electron scripts/make-icons.js",
     "icons:copy": "node scripts/copy-icons.js",
     "test": "node --test \"test/unit/*.test.js\" && electron test/electron/run.js",
@@ -29,6 +31,25 @@
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ],
+      "category": "public.app-category.productivity",
+      "icon": "build/icon.png",
+      "identity": "-",
+      "hardenedRuntime": false,
+      "darkModeSupport": true
+    },
+    "dmg": {
+      "title": "Desk Calendar"
     }
   },
   "dependencies": {

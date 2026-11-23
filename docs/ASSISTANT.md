@@ -67,7 +67,7 @@ so don't put anything there you wouldn't want them to see.
 
 ## Cost
 
-Measured numbers are in **[COST.md](COST.md)** (`.\scripts\bench.ps1` re-runs the benchmark). What keeps it low:
+Measured numbers are in **[COST.md](COST.md)** (`.\scripts\bench.ps1` on Windows or `./scripts/bench.sh` on a Mac re-runs the benchmark). What keeps it low:
 
 - **Prompt caching.** For Claude, the tools and system prompt are cached, and earlier turns too, so the assistant's
   follow-up requests within a message cost a fraction. For other providers, the request always starts with the same
@@ -85,7 +85,7 @@ unless you add their prices to `providers.js`).
 |---|---|
 | The most reliable results for very little money | **Claude**, model Haiku (about $0.002 a message) |
 | Free, hosted | **Gemini** (free tier), **Groq** (free tier), or **OpenRouter** `:free` models |
-| Free and private (nothing leaves your PC) | **Ollama** or **LM Studio** with a local model |
+| Free and private (nothing leaves your computer) | **Ollama** or **LM Studio** with a local model |
 | Something already at your company or school | **Other OpenAI-compatible API** with that server's address |
 
 Free tiers have rate limits and change over time; check the provider's own pricing page.
@@ -154,12 +154,13 @@ Note that one chat message can take several requests when the assistant calls to
 
 ## Ollama (local)
 
-Runs the model on your own PC. Free, private, works offline, but needs a reasonably powerful computer
-(a recent GPU with 8 GB+ of memory helps a lot; on CPU only, replies can take a minute).
+Runs the model on your own computer. Free, private, works offline, but needs a reasonably powerful computer
+(a recent GPU with 8 GB+ of memory, or an Apple Silicon Mac with 16 GB+, helps a lot; on CPU only, replies can take
+a minute).
 
 1. Install Ollama from <https://ollama.com/download>. It runs in the background after install.
-2. Download a model that supports tools, in PowerShell:
-   ```powershell
+2. Download a model that supports tools, in PowerShell (Windows) or Terminal (Mac):
+   ```shell
    ollama pull qwen3:8b
    ```
    Browse other tool-capable models at <https://ollama.com/search?c=tools>. Check one with
@@ -205,11 +206,17 @@ A key saved in Settings wins over the environment variable.
 | Cerebras | `CEREBRAS_API_KEY` |
 | Other | `ASSISTANT_API_KEY` |
 
-For one session in PowerShell:
+For one session in PowerShell (Windows):
 
 ```powershell
 $env:GEMINI_API_KEY = "paste-your-key-here"
 npm start
+```
+
+or in Terminal (Mac):
+
+```shell
+GEMINI_API_KEY="paste-your-key-here" npm start
 ```
 
 Never put a key in a file inside the project folder. If you do use a `.env` file for your own scripts,
@@ -223,7 +230,7 @@ times, locations, task notes and calendar names** for the days it looked at. You
 sent to the provider.
 
 - Hosted providers process that data under their own terms. Read them, especially for free tiers.
-- Local providers (Ollama, LM Studio) keep everything on your PC.
+- Local providers (Ollama, LM Studio) keep everything on your computer.
 
 ## Testing your setup
 

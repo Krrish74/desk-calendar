@@ -7,6 +7,15 @@
 
 const $ = (id) => document.getElementById(id);
 
+/** Running on a Mac? (Otherwise Windows.) Used for the title bar, wording and shortcuts. */
+const IS_MAC = desk.platform === 'darwin';
+/** Where secrets are encrypted, for messages in Settings. */
+const SECRET_HOME = IS_MAC ? 'your Mac’s Keychain' : 'your Windows account';
+/** 'CommandOrControl+Shift+Space' → 'Ctrl+Shift+Space' (Windows) or 'Cmd+Shift+Space' (Mac). */
+const prettyAccel = (acc) => (IS_MAC
+  ? acc.replace('CommandOrControl', 'Cmd').replace('Control', 'Ctrl').replace('Alt', 'Option')
+  : acc.replace('CommandOrControl', 'Ctrl'));
+
 /** Unwrap a backend reply: return data, or throw. Bounces to sign-in if needed. */
 function unwrap(res) {
   if (res?.code === 'NOT_SIGNED_IN') { showSetup(res.error); throw new Error(res.error); }
@@ -51,9 +60,9 @@ function startOfWeek(d, weekStartsOn) {
   return addDays(x, -diff);
 }
 
-// --- Formatting (Windows region settings, unless Settings → Time format says otherwise)
+// --- Formatting (the system's region settings, unless Settings → Time format says otherwise)
 
-/** { hour12: true/false } from the Time format setting, or {} to follow Windows. */
+/** { hour12: true/false } from the Time format setting, or {} to follow the system. */
 const hourOpts = () => {
   const f = typeof state !== 'undefined' ? state.prefs.timeFormat : 'system';
   return f === '12' ? { hour12: true } : f === '24' ? { hour12: false } : {};

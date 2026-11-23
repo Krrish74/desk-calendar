@@ -1,4 +1,4 @@
-/* styles.css: Desk Calendar's dark Windows 11 look.
+/* styles.css: Desk Calendar's dark Windows 11 look (with a few Mac adjustments: see html.mac).
    Change the whole look by editing the variables in :root.
    Icons come from icons.css (generated; see scripts/copy-icons.js). */
 
@@ -19,8 +19,9 @@
   --now: #3ddc97;         /* "happening now" */
 
   /* Type */
-  --font: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
-  --font-display: "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+  /* Segoe UI on Windows; the Mac has no Segoe, so it falls through to San Francisco. */
+  --font: "Segoe UI Variable Text", "Segoe UI", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --font-display: "Segoe UI Variable Display", "Segoe UI", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   --fs: 14px;             /* base text */
   --fs-small: 12px;
   --fs-caption: 11px;
@@ -50,7 +51,8 @@ body {
   user-select: none;
 }
 /* Windows 11: the page is see-through so the Mica material behind the window shows.
-   (app.js adds .mica to <html> when the backend says Mica is available.) */
+   On a Mac the same happens with its vibrancy material.
+   (app.js adds .mica to <html> when the backend says Mica / vibrancy is available.) */
 html.mica, html.mica body { background: transparent; }
 
 [hidden] { display: none !important; }
@@ -129,6 +131,10 @@ input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--accent);
 .titlebar-buttons { -webkit-app-region: no-drag; display: flex; }
 .titlebar-buttons button.icon { height: 30px; }
 #btn-pin.active { color: var(--accent); }
+/* Mac: the red/yellow/green buttons sit at the left of the title bar (they need ~70 px).
+   In full screen macOS hides them, so the room goes away too. */
+html.mac #titlebar { padding-left: 80px; }
+html.mac.fullscreen #titlebar { padding-left: 14px; }
 
 /* ============================================================== Setup */
 

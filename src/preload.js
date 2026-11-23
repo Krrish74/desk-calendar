@@ -12,6 +12,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 const call = (channel) => (...args) => ipcRenderer.invoke(channel, ...args);
 
 contextBridge.exposeInMainWorld('desk', {
+  platform: process.platform, // 'win32' or 'darwin': the page adapts its title bar and wording
   // auth
   authStatus: call('auth:status'),
   importCredentials: call('auth:importCredentials'),
@@ -64,4 +65,5 @@ contextBridge.exposeInMainWorld('desk', {
   onEventsChanged: (fn) => ipcRenderer.on('events:changed', () => fn()),
   onPrefsChanged: (fn) => ipcRenderer.on('prefs:changed', (_e, keys) => fn(keys)), // changed on the phone
   onCommand: (fn) => ipcRenderer.on('app:command', (_e, name, payload) => fn(name, payload)), // tray menu, notifications
+  onFullscreen: (fn) => ipcRenderer.on('app:fullscreen', (_e, on) => fn(on)), // Mac full screen
 });

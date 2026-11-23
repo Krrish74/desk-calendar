@@ -124,7 +124,7 @@ document.addEventListener('visibilitychange', () => {
 });
 
 /**
- * Pick up settings changed elsewhere: the Windows app shares some of them through the
+ * Pick up settings changed elsewhere: the desktop app (Windows or Mac) shares some of them through the
  * Worker (worker/src/sync.js), e.g. which calendars are shown or the time format.
  */
 async function refreshPrefs() {

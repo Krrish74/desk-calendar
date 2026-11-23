@@ -21,6 +21,7 @@ const windowManager = require('./windowManager');
 const background = require('./background');
 const notifier = require('./notifier');
 const { createSync } = require('./sync');
+const path = require('path');
 
 // The window lives in windowManager.js; tray, hotkey and start-with-Windows in background.js.
 const win = () => windowManager.get();
@@ -41,9 +42,15 @@ app.on('before-quit', (e) => {
 });
 
 // Windows needs this ID to show our notifications with the right name and icon.
-app.setAppUserModelId('com.local.deskcalendar');
+// (Windows-only API: it doesn't exist on macOS.)
+if (process.platform === 'win32') app.setAppUserModelId('com.local.deskcalendar');
 
 app.whenReady().then(async () => {
+  if (process.platform === 'darwin') {
+    require('./menu').setMacMenu();
+    // Running from source, the Dock would show Electron's icon; the built app has its own.
+    if (!app.isPackaged) app.dock?.setIcon(path.join(__dirname, '..', 'assets', 'icon-512.png'));
+  }
   // Silently reuse the saved Google token, if any. Awaited so the page's first
   // "am I signed in?" check sees the restored session.
   await auth.restoreSession().catch((err) => console.error('Restoring session failed:', err.message));
@@ -59,6 +66,8 @@ app.whenReady().then(async () => {
 
 // Closing the window only hides it, so the app keeps running until Quit in the tray.
 app.on('window-all-closed', () => {});
+// Mac: clicking the Dock icon (or opening the app again from Finder) brings the window back.
+app.on('activate', () => windowManager.show());
 
 // ---------------------------------------------------------------------------
 // IPC handlers: the ONLY things the page can ask the backend to do.

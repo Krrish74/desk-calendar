@@ -2,7 +2,7 @@
 
 The Cloudflare Worker behind the iPhone version of Desk Calendar. It serves the phone
 app (`../mobile`) and its API from one address, keeps you signed in to Google, holds the
-Claude API key, and (from Phase 4) sends reminder notifications. The Windows app in
+Claude API key, and (from Phase 4) sends reminder notifications. The desktop app (Windows or Mac) in
 `../src` doesn't use any of this.
 
 | File | What it does |
@@ -16,7 +16,7 @@ Claude API key, and (from Phase 4) sends reminder notifications. The Windows app
 | `src/tasks.js` | Google Tasks: lists, tasks in a range/overdue/undated, create/update/delete (port of `src/main/tasks.js`) |
 | `src/freetime.js` | Free time in working hours for find_free_time (copy of `src/main/freetime.js`) |
 | `src/deletes.js` | Delete with Undo for events and tasks (6-second window, finished by the request or the cron) |
-| `src/sync.js` | Settings shared with the Windows app (`/api/sync`, checked with the PC's Google token) |
+| `src/sync.js` | Settings shared with the desktop app (`/api/sync`, checked with the desktop app's Google token) |
 | `src/reminders.js` | Push reminders: subscribe/test endpoints and the every-minute cron (rules from `src/main/notifier.js`) |
 | `src/webpush.js` | Web Push encryption (RFC 8291) and VAPID signing (RFC 8292) with Web Crypto |
 | `src/prefs.js` / `models.js` | Settings and the Claude model list |
@@ -37,7 +37,7 @@ only file that talks to this Worker.
 
 ## Run it locally with sample data (no Google or Claude account needed)
 
-```powershell
+```shell
 cd worker
 npm install
 copy .dev.vars.example .dev.vars    # then put a long random string in TOKEN_KEY

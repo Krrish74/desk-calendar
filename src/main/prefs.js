@@ -9,8 +9,8 @@ const fs = require('fs');
 const path = require('path');
 
 const DEFAULTS = {
-  startWithWindows: true,                  // launch when you sign in to Windows
-  startHidden: true,                       // ...and start in the tray instead of opening the window
+  startWithWindows: true,                  // launch when you sign in to Windows / log in to the Mac
+  startHidden: true,                       // ...and start in the tray / menu bar instead of opening the window
   hotkey: 'CommandOrControl+Shift+Space',  // global show/hide shortcut (Electron accelerator format)
   alwaysOnTop: false,                      // pin button state
   trayHintShown: false,                    // one-time "still running in the tray" notification
@@ -20,7 +20,7 @@ const DEFAULTS = {
   weekStartsOn: 0,                         // 0 = Sunday, 1 = Monday
   startView: 'last',                       // view on launch: 'last' (last used) | day | week | month | agenda
   agendaDays: 8,                           // Agenda shows today + the next (agendaDays - 1) days
-  timeFormat: 'system',                    // 'system' (Windows setting) | '12' | '24'
+  timeFormat: 'system',                    // 'system' (Windows / macOS setting) | '12' | '24'
   defaultEventMinutes: 60,                 // length of new events (quick add, click-to-create, editor)
   defaultCalendarId: null,                 // calendar for new events; null = your primary calendar
   notifyEnabled: true,                     // desktop notifications before events

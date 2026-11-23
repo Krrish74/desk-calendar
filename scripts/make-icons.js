@@ -3,7 +3,11 @@
 //
 // Outputs:
 //   src/assets/icon-16.png, icon-32.png, icon-64.png, icon-256.png   (tray + window icon)
+//   src/assets/icon-512.png   (Mac Dock icon while running from source)
+//   src/assets/trayTemplate.png, trayTemplate@2x.png   (Mac menu bar icon: black + transparent,
+//       drawn from the Fluent calendar icon; macOS recolours it for light / dark menu bars)
 //   build/icon.ico   (multi-size icon electron-builder puts on the .exe and installer)
+//   build/icon.png   (1024 px; electron-builder turns it into the Mac app's .icns)
 
 const { app, BrowserWindow } = require('electron');
 const fs = require('fs');
@@ -11,18 +15,20 @@ const path = require('path');
 
 const ROOT = path.join(__dirname, '..');
 const SVG = fs.readFileSync(path.join(ROOT, 'src/assets/icon.svg'), 'utf8');
-const PNG_SIZES = [16, 32, 64, 256];
+const TRAY_SVG = fs.readFileSync(path.join(ROOT, 'src/assets/icons/calendar_ltr_20_regular.svg'), 'utf8');
+const PNG_SIZES = [16, 32, 64, 256, 512];
 const ICO_SIZES = [16, 20, 24, 32, 40, 48, 64, 256];
 
 app.disableHardwareAcceleration();
+app.on('window-all-closed', () => {}); // keep running between renders; app.quit() at the end
 
-// Render the SVG once at 256 px; smaller sizes are high-quality downscales of it.
-async function renderMaster() {
-  const S = 256;
+// Render an SVG at S px. The app icon is rendered once at 1024 px; smaller sizes are
+// high-quality downscales of it.
+async function renderSvg(svg, S) {
   const win = new BrowserWindow({ width: S, height: S, show: false, frame: false, transparent: true,
     useContentSize: true, webPreferences: { offscreen: true } });
   const html = `<html><body style="margin:0;background:transparent;overflow:hidden">
-    <img src="data:image/svg+xml;base64,${Buffer.from(SVG).toString('base64')}" width="${S}" height="${S}"></body></html>`;
+    <img src="data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}" width="${S}" height="${S}"></body></html>`;
   await win.loadURL('data:text/html;base64,' + Buffer.from(html).toString('base64'));
   await new Promise((r) => setTimeout(r, 300));
   const img = await win.webContents.capturePage({ x: 0, y: 0, width: S, height: S });
@@ -55,9 +61,15 @@ function buildIco(images) {
 
 app.whenReady().then(async () => {
   fs.mkdirSync(path.join(ROOT, 'build'), { recursive: true });
-  master = await renderMaster();
+  master = await renderSvg(SVG, 1024);
   for (const size of PNG_SIZES) {
     fs.writeFileSync(path.join(ROOT, `src/assets/icon-${size}.png`), render(size));
+  }
+  fs.writeFileSync(path.join(ROOT, 'build/icon.png'), master.toPNG());
+  // Menu bar template: 16 pt, plus 32 px for Retina (downscaled from a 256 px render).
+  const tray = await renderSvg(TRAY_SVG, 256);
+  for (const [name, size] of [['trayTemplate.png', 16], ['trayTemplate@2x.png', 32]]) {
+    fs.writeFileSync(path.join(ROOT, 'src/assets', name), tray.resize({ width: size, height: size, quality: 'best' }).toPNG());
   }
   const images = ICO_SIZES.map((size) => ({ size, png: render(size) }));
   fs.writeFileSync(path.join(ROOT, 'build/icon.ico'), buildIco(images));

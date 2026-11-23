@@ -417,6 +417,35 @@ function uiTests() {
           await shot('sidebar-tasks.png');
         });
 
+        // Runs on whichever system the tests run on (CI runs them on Windows and macOS).
+        await test(`fits the platform (${process.platform})`, async () => {
+          const mac = process.platform === 'darwin';
+          eq(await js(`document.documentElement.classList.contains('mac')`), mac, 'html.mac');
+          const pad = await js(`getComputedStyle($('titlebar')).paddingLeft`);
+          eq(pad, mac ? '80px' : '14px', 'room for the traffic lights only on a Mac');
+          const startup = await js(`$('s-startup').closest('.srow').querySelector('.srow-title').textContent`);
+          eq(startup, mac ? 'Open at login' : 'Start with Windows');
+          eq(await js(`prettyAccel('CommandOrControl+Alt+K')`), mac ? 'Cmd+Option+K' : 'Ctrl+Alt+K');
+          const background = require(path.join(SRC, 'background.js'));
+          eq(background.pretty('CommandOrControl+Shift+Space'), mac ? 'Cmd+Shift+Space' : 'Ctrl+Shift+Space');
+          if (mac) {
+            const { Menu } = require('electron');
+            const labels = Menu.getApplicationMenu().items.map((i) => i.label);
+            eq(labels.slice(0, 3), ['Desk Calendar', 'File', 'Edit'], 'Mac menu bar');
+            const file = Menu.getApplicationMenu().items[1].submenu.items.map((i) => i.label);
+            ok(file.includes('New Event'), 'File → New Event');
+            // The shortcut recorder takes Cmd (metaKey) on a Mac.
+            await js(`$('s-hotkey').focus(); $('s-hotkey').dispatchEvent(new KeyboardEvent('keydown', { key: 'k', code: 'KeyK', metaKey: true, altKey: true, bubbles: true }))`);
+            await wait(800);
+            eq(await js(`$('s-hotkey').value`), 'Cmd+Option+K', 'recorded Cmd+Option+K');
+          }
+          // Hiding and bringing the window back (red button / Dock click on a Mac, × / tray on Windows).
+          w.close(); await wait(300);
+          eq(w.isVisible(), false, 'close hides');
+          app.emit('activate'); await wait(300);
+          eq(w.isVisible(), true, 'Dock click / activate shows it again');
+        });
+
         resolve();
       });
     });

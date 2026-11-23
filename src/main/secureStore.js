@@ -1,15 +1,19 @@
 // secureStore.js: encrypted key/value storage for secrets (Google token, Claude API key).
 //
 // HOW IT'S SECURE
-// Electron's `safeStorage` calls Windows DPAPI (Data Protection API). DPAPI encrypts
-// data with a key tied to YOUR Windows user account, so the files we write are
-// unreadable gibberish to other users on the PC, to anyone who copies the file to
-// another machine, and to anyone browsing the folder. No password needed, and
-// nothing is ever written in plain text.
+// Electron's `safeStorage` encrypts with the operating system's own protection:
+//   • Windows: DPAPI (Data Protection API), with a key tied to YOUR Windows user account.
+//   • macOS: a key kept in your login Keychain. The first time, macOS may ask whether
+//     Desk Calendar may use it; choose "Always Allow".
+// Either way the files we write are unreadable gibberish to other users on the computer, to
+// anyone who copies the file to another machine, and to anyone browsing the folder. No
+// password needed, and nothing is ever written in plain text.
 //
 // WHERE IT'S STORED
-// app.getPath('userData') = %APPDATA%\desk-calendar\ (or %APPDATA%\Desk Calendar\ once
-// packaged). That's outside your project folder, so secrets can't end up in git.
+// app.getPath('userData'):
+//   • Windows: %APPDATA%\desk-calendar\ (or %APPDATA%\Desk Calendar\ once packaged)
+//   • macOS: ~/Library/Application Support/desk-calendar/ (or .../Desk Calendar/ once packaged)
+// That's outside your project folder, so secrets can't end up in git.
 
 const { app, safeStorage } = require('electron');
 const fs = require('fs');
@@ -25,7 +29,7 @@ function fileFor(name) {
 /** Encrypt `value` (any JSON-serializable thing) and save it under `name`. */
 async function save(name, value) {
   if (!(await safeStorage.isAsyncEncryptionAvailable())) {
-    // On Windows this is always available; refusing is safer than writing plain text.
+    // Always available on Windows and macOS; refusing is safer than writing plain text.
     throw new Error('OS encryption is unavailable, so the secret was not saved.');
   }
   const encrypted = await safeStorage.encryptStringAsync(JSON.stringify(value));
@@ -48,7 +52,7 @@ async function load(name) {
     if (shouldReEncrypt) await save(name, value);
     return value;
   } catch {
-    return null; // encrypted by a different Windows user, or corrupted
+    return null; // encrypted by a different user / computer, or corrupted
   }
 }
 

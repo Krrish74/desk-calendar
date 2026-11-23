@@ -1,6 +1,6 @@
 // settings.js: the Settings page (General · Calendars · Assistant · Account).
 //
-// Every control saves immediately (no "Save" button), like Windows Settings.
+// Every control saves immediately (no "Save" button), like Windows Settings / macOS System Settings.
 // Preferences live in prefs.json via the backend (src/main/prefs.js);
 // secrets (AI API keys) go to secureStore instead.
 
@@ -178,7 +178,7 @@ $('s-startup').onchange = async () => {
 };
 $('s-start-hidden').onchange = () => savePrefs({ startHidden: $('s-start-hidden').checked });
 
-// Shortcut recorder: click the box, press e.g. Ctrl+Alt+K. Esc cancels.
+// Shortcut recorder: click the box, press e.g. Ctrl+Alt+K (Cmd+Option+K on a Mac). Esc cancels.
 let hotkeyBefore = '';
 $('s-hotkey').addEventListener('focus', () => {
   hotkeyBefore = $('s-hotkey').value;
@@ -199,7 +199,7 @@ $('s-hotkey').addEventListener('keydown', async (e) => {
   $('s-hotkey').blur();
   try {
     unwrap(await desk.setPrefs({ hotkey: accel }));
-    $('s-hotkey').value = accel.replace('CommandOrControl', 'Ctrl');
+    $('s-hotkey').value = prettyAccel(accel);
     setHotkeyMsg('✔ Shortcut saved.', false, true);
   } catch (err) {
     $('s-hotkey').value = hotkeyBefore;
@@ -208,7 +208,8 @@ $('s-hotkey').addEventListener('keydown', async (e) => {
 });
 
 /** Turn a keydown event into an Electron accelerator, e.g. 'CommandOrControl+Shift+Space'.
- *  Needs at least one of Ctrl/Alt plus a normal key, so it can't clash with typing. */
+ *  Needs at least one of Ctrl/Alt (Windows) or Cmd/Ctrl/Option (Mac) plus a normal key, so it
+ *  can't clash with typing. On a Mac, Cmd is 'CommandOrControl' and Ctrl is 'Control'. */
 function toAccelerator(e) {
   const named = { ' ': 'Space', ArrowUp: 'Up', ArrowDown: 'Down', ArrowLeft: 'Left', ArrowRight: 'Right',
     Enter: 'Enter', Tab: 'Tab', Backspace: 'Backspace', Delete: 'Delete', Home: 'Home', End: 'End',
@@ -217,6 +218,11 @@ function toAccelerator(e) {
   if (!key && /^F\d{1,2}$/.test(e.key)) key = e.key;
   if (!key && /^Key[A-Z]$/.test(e.code)) key = e.code.slice(3);   // layout-independent letters
   if (!key && /^Digit\d$/.test(e.code)) key = e.code.slice(5);
+  if (IS_MAC) {
+    if (!key || !(e.metaKey || e.ctrlKey || e.altKey)) return null;
+    return [e.metaKey && 'CommandOrControl', e.ctrlKey && 'Control', e.altKey && 'Alt', e.shiftKey && 'Shift', key]
+      .filter(Boolean).join('+');
+  }
   if (!key || !(e.ctrlKey || e.altKey)) return null;
   return [e.ctrlKey && 'CommandOrControl', e.altKey && 'Alt', e.shiftKey && 'Shift', key].filter(Boolean).join('+');
 }
@@ -260,7 +266,7 @@ async function fillAssistant() {
   $('s-key-link').hidden = !p.keyUrl;
   $('s-key-link').onclick = () => desk.openUrl(p.keyUrl);
   $('s-key-status').textContent = info.keySaved
-    ? '✔ A key is saved (encrypted with your Windows account). Paste a new one to replace it.'
+    ? `✔ A key is saved (encrypted with ${SECRET_HOME}). Paste a new one to replace it.`
     : info.keyFromEnv ? `Using the ${info.keyEnv} environment variable.`
     : p.keyRequired ? 'No key saved yet.' : 'Only needed if your server checks keys.';
 
@@ -382,7 +388,7 @@ $('btn-save-key').onclick = async () => {
   try {
     unwrap(await desk.chatSetKey(key));
     $('s-key').value = '';
-    $('s-key-status').textContent = '✔ Saved (encrypted with your Windows account).';
+    $('s-key-status').textContent = `✔ Saved (encrypted with ${SECRET_HOME}).`;
   } catch (e) { $('s-key-status').textContent = e.message; }
 };
 

@@ -1,0 +1,64 @@
+# Runs the tests on Windows and macOS for every push, and builds the Mac app as a check.
+# Nothing secret is used: Google and the AI providers are mocked in the tests.
+name: Tests
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  desktop:
+    name: Desktop app (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Unit + Electron tests (real window, mocked Google and AI)
+        if: runner.os != 'macOS'
+        run: npm test
+      - name: Unit + Electron tests, saving screenshots of the Mac look
+        if: runner.os == 'macOS'
+        run: |
+          mkdir -p "$RUNNER_TEMP/shots"
+          SHOTS_DIR="$RUNNER_TEMP/shots" npm test
+      - name: Build the Mac app (Apple Silicon)
+        if: runner.os == 'macOS'
+        run: npx electron-builder --mac dmg --arm64 --publish never
+      - name: Keep the screenshots and the Mac build for 7 days
+        if: always() && runner.os == 'macOS'
+        uses: actions/upload-artifact@v7
+        with:
+          name: mac-build-and-screenshots
+          path: |
+            ${{ runner.temp }}/shots
+            dist/*.dmg
+          retention-days: 7
+          if-no-files-found: warn
+
+  worker:
+    name: iPhone app's Worker
+    runs-on: macos-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: worker
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npm test

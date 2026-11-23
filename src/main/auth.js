@@ -8,7 +8,7 @@
 //  4. We trade that `code` (plus a secret PKCE "verifier" only we know) for tokens:
 //       - access_token:  short-lived (1 hour), sent with every Calendar API call
 //       - refresh_token: long-lived, used to silently get new access tokens
-//  5. We encrypt the tokens with secureStore (Windows DPAPI) and shut the server down.
+//  5. We encrypt the tokens with secureStore (Windows DPAPI / macOS Keychain) and shut the server down.
 //
 // PKCE ("pixie") stops another program on your PC from stealing the `code` in step 3:
 // the code is useless without the verifier, which never leaves this process.
@@ -111,7 +111,7 @@ function signIn() {
 
       const finish = (ok, message) => {
         res.writeHead(ok ? 200 : 400, { 'Content-Type': 'text/html; charset=utf-8' });
-        res.end(`<body style="font-family:Segoe UI;background:#111;color:#eee;padding:40px">
+        res.end(`<body style="font-family:Segoe UI,-apple-system,sans-serif;background:#111;color:#eee;padding:40px">
           <h2>${ok ? '✅ Signed in' : '❌ Sign-in failed'}</h2><p>${message}</p></body>`);
         server.close();
       };

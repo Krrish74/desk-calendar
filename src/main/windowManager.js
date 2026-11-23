@@ -1,6 +1,7 @@
 // windowManager.js: creates the main window and remembers its size/position/maximized state.
 //
 // LOOK
+//  Windows:
 //  • titleBarStyle 'hidden' + titleBarOverlay: Windows draws its own minimize / maximize /
 //    close buttons in the top-right (so you get the Windows 11 Snap Layouts flyout when you
 //    hover maximize, Win+arrow snapping, and double-click-to-maximize). Our page draws
@@ -8,9 +9,14 @@
 //  • backgroundMaterial 'mica': Windows 11's tinted, wallpaper-aware background. The page's
 //    body is transparent so Mica shows through; cards and dialogs stay solid for readability.
 //    On Windows 10 / older Windows 11 we fall back to the solid dark background.
+//  macOS:
+//  • titleBarStyle 'hidden' keeps the red / yellow / green buttons, placed at the left of the
+//    same 36 px strip (the page leaves room for them).
+//  • vibrancy 'under-window': the Mac's translucent dark material, used the same way as Mica.
 //
 // CLOSE = HIDE
-//  Clicking × hides the window to the tray instead of quitting. Quit from the tray menu.
+//  Clicking × hides the window to the tray (Windows) or menu bar (Mac) instead of quitting.
+//  Quit from that icon's menu, or with Cmd+Q on a Mac.
 
 const { app, BrowserWindow, Notification, nativeTheme, screen, shell } = require('electron');
 const fs = require('fs');
@@ -24,8 +30,11 @@ const TITLEBAR_HEIGHT = 36;
 const SOLID_BG = '#0f1115'; // same as --bg in styles.css
 const ICON = path.join(__dirname, '..', 'assets', 'icon-256.png');
 
+const IS_MAC = process.platform === 'darwin';
 // Mica needs Windows 11 22H2 (build 22621) or newer.
 const SUPPORTS_MICA = process.platform === 'win32' && Number(os.release().split('.')[2]) >= 22621;
+// See-through page background: Mica on Windows 11, vibrancy on every Mac.
+const TRANSLUCENT = SUPPORTS_MICA || IS_MAC;
 
 let win = null;
 let quitting = false; // true once the user really wants to quit (tray → Quit)
@@ -77,14 +86,22 @@ function create({ startHidden = false } = {}) {
     icon: ICON,
     alwaysOnTop: prefs.get('alwaysOnTop'),
     titleBarStyle: 'hidden',
-    titleBarOverlay: {
-      color: SUPPORTS_MICA ? '#00000000' : SOLID_BG, // transparent over Mica
-      symbolColor: '#e6e8ee',
-      height: TITLEBAR_HEIGHT,
-    },
-    ...(SUPPORTS_MICA
-      ? { backgroundMaterial: 'mica', backgroundColor: '#00000000' }
-      : { backgroundColor: SOLID_BG }),
+    ...(IS_MAC
+      ? {
+        // Traffic lights vertically centred in the 36 px title bar.
+        trafficLightPosition: { x: 14, y: 12 },
+        vibrancy: 'under-window', visualEffectState: 'followWindow', backgroundColor: '#00000000',
+      }
+      : {
+        titleBarOverlay: {
+          color: SUPPORTS_MICA ? '#00000000' : SOLID_BG, // transparent over Mica
+          symbolColor: '#e6e8ee',
+          height: TITLEBAR_HEIGHT,
+        },
+        ...(SUPPORTS_MICA
+          ? { backgroundMaterial: 'mica', backgroundColor: '#00000000' }
+          : { backgroundColor: SOLID_BG }),
+      }),
     webPreferences: {
       preload: path.join(__dirname, '..', 'preload.js'),
       contextIsolation: true, // page JS can't touch preload/Node internals
@@ -107,8 +124,14 @@ function create({ startHidden = false } = {}) {
 
   // ?mica=1 tells the page to make its background transparent (see styles.css: html.mica).
   win.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'), {
-    query: { mica: SUPPORTS_MICA ? '1' : '0' },
+    query: { mica: TRANSLUCENT ? '1' : '0' },
   });
+
+  // Mac full screen hides the traffic lights, so the page can drop the room it keeps for them.
+  if (IS_MAC) {
+    win.on('enter-full-screen', () => win.webContents.send('app:fullscreen', true));
+    win.on('leave-full-screen', () => win.webContents.send('app:fullscreen', false));
+  }
 
   win.once('ready-to-show', () => {
     if (saved.maximized) win.maximize();
@@ -128,7 +151,13 @@ function create({ startHidden = false } = {}) {
     saveState();
     if (quitting) return;
     e.preventDefault();
-    win.hide();
+    // A full-screen Mac window has to leave full screen before it can hide cleanly.
+    if (IS_MAC && win.isFullScreen()) {
+      win.once('leave-full-screen', () => win.hide());
+      win.setFullScreen(false);
+    } else {
+      win.hide();
+    }
     showTrayHintOnce();
   });
 
@@ -145,7 +174,9 @@ function showTrayHintOnce() {
   if (prefs.get('trayHintShown') || !Notification.isSupported()) return;
   new Notification({
     title: 'Desk Calendar',
-    body: 'Desk Calendar is still running in the tray.',
+    body: IS_MAC
+      ? 'Desk Calendar is still running in the menu bar. Quit with Cmd+Q.'
+      : 'Desk Calendar is still running in the tray.',
     icon: ICON,
     silent: true,
   }).show();
@@ -181,4 +212,5 @@ module.exports = {
   get: () => win,
   setQuitting: () => { quitting = true; },
   SUPPORTS_MICA,
+  IS_MAC,
 };

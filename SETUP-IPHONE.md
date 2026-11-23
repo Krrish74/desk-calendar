@@ -8,8 +8,8 @@ This puts Desk Calendar on your iPhone as a Home Screen app. It's a web app (a
 - sends reminder notifications, and
 - only lets **your** Google account in.
 
-It's optional: the Windows app works on its own and isn't changed by any of this. You can
-also set up only the phone app.
+It's optional: the desktop app (Windows or Mac) works on its own and isn't changed by any of
+this. You can also set up only the phone app. Every step works the same from a Windows PC or a Mac.
 
 > Website menus change now and then. If a label below doesn't match exactly, look
 > for the closest equivalent. The steps don't change.
@@ -17,23 +17,27 @@ also set up only the phone app.
 **You'll need:**
 
 - an iPhone on **iOS 16.4 or later** (Settings → General → About)
-- a computer with [Node.js](https://nodejs.org/) 20 or newer and this repository cloned
-  (the commands below are for Windows PowerShell; they work the same in a macOS/Linux terminal)
+- a Windows PC or a Mac with [Node.js](https://nodejs.org/) 22 or newer and this repository
+  cloned. The commands below are typed in PowerShell on Windows or Terminal on a Mac; they're
+  the same in both.
 - the Google account whose calendar you use, with a Google Cloud project set up as in
   [SETUP-GOOGLE.md](SETUP-GOOGLE.md) steps 1–3 (project, Calendar API, consent screen with
   the calendar scopes and you as a test user). The "Desktop app" client in its step 4 is
-  only needed for the Windows app.
+  only needed for the desktop app.
 - a Claude API key from <https://platform.claude.com/> (for the assistant; everything
   else works without it)
 - a free Cloudflare account (step 1)
 
 All commands below are typed in the repository's `worker` folder:
 
-```powershell
-cd path\to\desk-calendar\worker
+```shell
+cd path/to/desk-calendar/worker
 ```
 
-```powershell
+(On Windows the slashes can go either way, e.g. `cd C:\Users\you\desk-calendar\worker`;
+on a Mac, e.g. `cd ~/desk-calendar/worker`.)
+
+```shell
 npm install
 ```
 
@@ -48,7 +52,7 @@ npm install
 
 ## 2. Connect this computer to your Cloudflare account
 
-```powershell
+```shell
 npx wrangler login
 ```
 
@@ -67,7 +71,7 @@ Your app's address will be `https://desk-calendar.<your-subdomain>.workers.dev`.
 
 ## 3. Create the database
 
-```powershell
+```shell
 npm run setup:db
 ```
 
@@ -79,7 +83,7 @@ migrations. Running it again later is safe.
 
 ## 4. Deploy the app
 
-```powershell
+```shell
 npm run deploy
 ```
 
@@ -89,7 +93,7 @@ steps. (Opening it now shows "Not set up yet" when you try to sign in. That's ex
 
 ## 5. Add a Web OAuth client in Google Cloud
 
-The Windows app uses a "Desktop app" client. The phone version needs its own
+The desktop app uses a "Desktop app" client. The phone version needs its own
 **Web application** client, because Google sends you back to the Worker after you
 sign in. Same project, same consent screen.
 
@@ -113,7 +117,7 @@ sign in. Same project, same consent screen.
 ### Google Tasks: turn on the API and add the scope
 
 The phone shows your Google Tasks ("Today's tasks", tasks in the Agenda, planning with
-the assistant). If you already did this for the Windows app, skip to the next section.
+the assistant). If you already did this for the desktop app, skip to the next section.
 
 1. Left menu ☰ → **APIs & Services** → **Library**. Search for **Google Tasks API**,
    open it and click **Enable**. (Without it the app says "The Google Tasks API is
@@ -143,11 +147,11 @@ so the phone would ask you to sign in again every week. To stop that:
 
 Only your account can sign in either way: the Worker's allow-list (next step)
 refuses everyone else, even if Google lets them through. This also stops the weekly
-sign-ins in the Windows app.
+sign-ins in the desktop app.
 
 ## 6. Put the secrets on the Worker
 
-```powershell
+```shell
 npm run secrets
 ```
 
@@ -173,10 +177,10 @@ To change one later: `npx wrangler secret put NAME` (for example
 
 ## 7. Check it on your computer (optional, 1 minute)
 
-Open your app's address in Chrome or Edge on the PC, click **Sign in with Google**,
-pick your account, click **Continue** on the "unverified app" screen, and allow both
-calendar permissions. Your calendar appears. (Signing in on the PC doesn't sign in
-the phone: each device signs in once.)
+Open your app's address in a browser on your computer (Chrome, Edge or Safari), click
+**Sign in with Google**, pick your account, click **Continue** on the "unverified app"
+screen, and allow both calendar permissions. Your calendar appears. (Signing in on the
+computer doesn't sign in the phone: each device signs in once.)
 
 ## 8. Install it on your iPhone
 
@@ -201,7 +205,7 @@ to the Home Screen **first**, then sign in from the icon:
    with the app closed.
 
 Reminders come for timed events on the calendars shown in the app; all-day events and
-meetings you declined are skipped (same rules as the Windows app). Tapping one opens
+meetings you declined are skipped (same rules as the desktop app). Tapping one opens
 the event. They're sent "silent", but iPhone decides: if you hear a sound, turn it off
 in the iPhone **Settings** app → **Notifications** → **Desk Cal** → **Sounds**.
 
@@ -219,22 +223,22 @@ in the iPhone **Settings** app → **Notifications** → **Desk Cal** → **Soun
   week": it shows the plan first and only adds the time blocks after you say yes.
 - **Settings → Assistant → Spending** shows what the last message and this month cost.
 
-## 11. Link the Windows app (optional)
+## 11. Link the desktop app (optional)
 
 Your calendar and tasks are always the same on both, because both use your Google
 account. Linking also keeps these settings the same: which calendars and task lists are
 shown, default calendar and task list, default event length, time format, week start,
 reminder minutes, and **About you**.
 
-1. In the Windows app: **Settings → Account → Phone app**.
+1. In the desktop app (Windows or Mac): **Settings → Account → Phone app**.
 2. Paste your app's address (`https://desk-calendar.<your-subdomain>.workers.dev`) and
    click **Link**. It says "Linked · synced 3:02 PM" when it worked.
 
-No code or extra sign-in: the Windows app proves who you are with the Google sign-in it
+No code or extra sign-in: the desktop app proves who you are with the Google sign-in it
 already has, and the Worker checks with Google that it's your allowed account in your
 Desk Calendar project. The first time, settings you already changed on the phone win;
-the PC's values fill in the rest. After that, a change on either side reaches the other
-within a few minutes (immediately on the PC side; the phone picks changes up when you
+the computer's values fill in the rest. After that, a change on either side reaches the other
+within a few minutes (immediately on the computer's side; the phone picks changes up when you
 open it). Reminders on/off, the view, and the assistant's provider, model and
 conversation stay separate on each device. **Unlink** in the same place stops it.
 
@@ -242,7 +246,7 @@ conversation stay separate on each device. **Unlink** in the same place stops it
 
 ## Updating after code changes
 
-```powershell
+```shell
 npm run deploy
 ```
 
@@ -251,17 +255,17 @@ picks up the new version the next time you open the app (sometimes the time afte
 
 To watch the Worker's live log (sign-ins, errors, reminders sent):
 
-```powershell
+```shell
 npm run logs
 ```
 
 ## Trying changes locally first (no real calendar)
 
-```powershell
+```shell
 npm run db:local
 ```
 
-```powershell
+```shell
 npm run dev:mock
 ```
 

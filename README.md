@@ -1,8 +1,10 @@
 # Desk Calendar
 
-A dark, Windows 11-style desktop app for **Google Calendar**, with an **AI assistant** that can read and
-change your schedule. Built with Electron. Bring your own Google Cloud project and your own AI provider
-(Claude, Gemini, OpenAI, Groq, OpenRouter, a local model through Ollama, or any OpenAI-compatible server).
+A dark desktop app for **Google Calendar** on **Windows and macOS**, with an **AI assistant** that can read and
+change your schedule. Built with Electron: one codebase that looks at home on both (Mica and Windows' own caption
+buttons on Windows 11; vibrancy, the traffic-light buttons, a menu bar icon and the usual Cmd shortcuts on a Mac).
+Bring your own Google Cloud project and your own AI provider (Claude, Gemini, OpenAI, Groq, OpenRouter, a local
+model through Ollama, or any OpenAI-compatible server).
 
 ![Week view with sample data](docs/screenshots/week.png)
 
@@ -19,17 +21,20 @@ change your schedule. Built with Electron. Bring your own Google Cloud project a
   **"plan my week"**: it turns your tasks into time blocks around your events, following an **About you** profile
   (working hours, focus time, block length, breaks). It shows the plan first and creates the blocks when you agree.
   About $0.001 a message on Claude Haiku: see **[docs/COST.md](docs/COST.md)**
-- **Desktop notifications** before events, **tray icon**, **Ctrl+Shift+Space** to show/hide, **starts with Windows**
-- **Mica** background, Fluent icons, keyboard shortcuts (D / W / M / A views, T today, J / K previous/next, C create)
-- **Your secrets stay on your PC**: Google sign-in and API keys are encrypted with your Windows account (DPAPI)
+- **Desktop notifications** before events, a **tray icon** (Windows) or **menu bar icon** (Mac), **Ctrl+Shift+Space**
+  (**Cmd+Shift+Space** on a Mac) to show/hide from any app, **starts when you sign in**
+- **Mica** (Windows 11) or **vibrancy** (Mac) background, Fluent icons, keyboard shortcuts (D / W / M / A views,
+  T today, J / K previous/next, C create; on a Mac also Cmd+N new event, Cmd+R refresh, Cmd+, settings)
+- **Your secrets stay on your computer**: Google sign-in and API keys are encrypted by the operating system
+  (DPAPI with your Windows account, or your Mac's Keychain)
 
 ## What you need
 
 | | |
 |---|---|
-| Windows 10 or 11 | The app uses Windows features (Mica, tray, DPAPI). It may run elsewhere, but only Windows is tested. |
-| [Node.js](https://nodejs.org/) 20 or newer | Includes npm. Check with `node -v`. |
-| [Git](https://git-scm.com/download/win) | To clone this repository. |
+| **Windows 10 or 11**, or **macOS 12 (Monterey) or newer** | Apple Silicon and Intel Macs both work. |
+| [Node.js](https://nodejs.org/) 22 or newer | Includes npm. Check with `node -v`. On a Mac, the installer from nodejs.org or `brew install node`. |
+| [Git](https://git-scm.com/downloads) | To clone this repository. On a Mac, `git --version` offers to install it if it's missing. |
 | A Google account | The calendar you want to see. |
 | A Google Cloud project (free) | You create your own OAuth client in about 10 minutes: [SETUP-GOOGLE.md](SETUP-GOOGLE.md). |
 | An AI provider (optional) | Only for the assistant. Several are free: [docs/ASSISTANT.md](docs/ASSISTANT.md). |
@@ -43,22 +48,24 @@ their **own** AI key. Nothing secret is in this repository.
 The same calendar on your iPhone: Agenda / Day / 3-day / Month views, quick add, Google Tasks, the Claude
 assistant with task planning, and silent reminder notifications. It's an installable web app (`mobile/`) that you
 add to your Home Screen, served by a small, free **Cloudflare Worker** (`worker/`) that keeps you signed in to
-Google, holds the Claude key, sends the reminders, and only lets your own Google account in. No Mac, Xcode or
-Apple developer account needed.
+Google, holds the Claude key, sends the reminders, and only lets your own Google account in. No Xcode or
+Apple developer account needed, and the setup works the same from a Windows PC or a Mac.
 
 1. Set up the Google Cloud project ([SETUP-GOOGLE.md](SETUP-GOOGLE.md) steps 1–3) if you haven't already.
 2. Follow **[SETUP-IPHONE.md](SETUP-IPHONE.md)** (about 30 minutes): Cloudflare account, `npm run setup:db`,
    `npm run deploy`, a Web OAuth client, `npm run secrets`, then Add to Home Screen.
-3. Optional: in the Windows app, **Settings → Account → Phone app** links the two, so shown calendars, defaults
-   and "About you" stay the same on both.
+3. Optional: in the desktop app (Windows or Mac), **Settings → Account → Phone app** links the two, so shown
+   calendars, defaults and "About you" stay the same on both.
 
-The Windows app doesn't need any of it. The code is explained in [worker/README.md](worker/README.md); its tests
+The desktop app doesn't need any of it. The code is explained in [worker/README.md](worker/README.md); its tests
 run with `npm test` inside `worker/`, and `npm run dev:mock` there runs the whole phone app locally against a fake
 calendar.
 
 ## Quick start
 
-```powershell
+The same four commands on Windows (PowerShell) and on a Mac (Terminal):
+
+```shell
 git clone <this repository's URL>
 cd desk-calendar
 npm install
@@ -72,11 +79,15 @@ Then:
 3. Optional: open **Settings → Assistant**, pick a provider and paste its API key
    (see **[docs/ASSISTANT.md](docs/ASSISTANT.md)**).
 
+On a Mac, the first time the app saves your sign-in, macOS asks whether it may use its key in your Keychain.
+Enter your Mac password and click **Always Allow**. While running from source the menu bar and Dock say
+"Electron"; the built app ([below](#build-the-app)) is called Desk Calendar.
+
 Something not working? See **[docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)**.
 
 ## Tests
 
-```powershell
+```shell
 npm test
 ```
 
@@ -84,12 +95,16 @@ Runs the unit tests (free-time arithmetic) with Node's test runner, then the app
 against mock Claude / OpenAI-compatible servers (caching markers, task tools, plan-then-confirm, short ids, cost
 tracking) and the UI in a real window with a stubbed Google account. Nothing touches your real calendar, settings or keys.
 
-`.\scripts\bench.ps1` runs the **live cost benchmark**: real Claude Haiku 5.5 requests against a made-up week, a few
-cents in total, results written to [docs/COST.md](docs/COST.md).
+`.\scripts\bench.ps1` (Windows) or `./scripts/bench.sh` (Mac) runs the **live cost benchmark**: real Claude Haiku 5.5
+requests against a made-up week, a few cents in total, results written to [docs/COST.md](docs/COST.md).
 
-## Build the installer
+## Build the app
 
-```powershell
+`npm run dist` builds for the computer you run it on. Build the Windows app on Windows and the Mac app on a Mac.
+
+**Windows**
+
+```shell
 npm run dist
 ```
 
@@ -97,9 +112,21 @@ This produces `dist\Desk Calendar Setup 1.0.0.exe`. Run it to install (Start men
 uninstall via Windows Settings → Apps). The installer is **unsigned**, so Windows SmartScreen says
 "Windows protected your PC". Click **More info → Run anyway**. That's normal for personal apps.
 
+**Mac**
+
+```shell
+npm run dist
+```
+
+This produces two disk images in `dist/`: `Desk Calendar-1.0.0-arm64.dmg` for Apple Silicon (M1 and newer) and
+`Desk Calendar-1.0.0.dmg` for Intel Macs. Open the one for your Mac and drag **Desk Calendar** into **Applications**.
+A copy you built yourself opens normally. The app isn't signed with an Apple Developer ID, so a copy someone
+*sends* you is blocked at first ("Apple could not verify…"): open **System Settings → Privacy & Security**, scroll
+down and click **Open Anyway** next to Desk Calendar. Uninstall by dragging it from Applications to the Bin.
+
 Only `src/` and `package.json` (plus dependencies) go into the package, so a `credentials.json` sitting in
 the project folder is **not** shipped. Each installed copy loads its own credentials on first run.
-Start with Windows only takes effect in the installed app.
+Start with Windows / Open at login only takes effect in the built app.
 
 ## The assistant
 
@@ -118,7 +145,7 @@ same page so it plans around how you actually work.
 | Groq / Cerebras | Free tier or trial | Fast hosted open models (gpt-oss, Llama, Qwen). |
 | OpenRouter | `:free` models, about 50 requests a day | One key, hundreds of models. |
 | OpenAI | Pay per use | |
-| Ollama / LM Studio | Free | Runs on your PC; nothing leaves your computer. Needs a capable machine. |
+| Ollama / LM Studio | Free | Runs on your computer; nothing leaves it. Needs a capable machine (Apple Silicon Macs do well). |
 | Anything OpenAI-compatible | Varies | Cloudflare Workers AI, Together, vLLM, a company gateway… |
 
 Step-by-step setup for each one, model suggestions and privacy notes: **[docs/ASSISTANT.md](docs/ASSISTANT.md)**.
@@ -129,12 +156,13 @@ Step-by-step setup for each one, model suggestions and privacy notes: **[docs/AS
 src/
 ├─ main/                  ← BACKEND (Node.js). Talks to Google and the AI provider. Holds all secrets.
 │  ├─ main.js             startup + the list of IPC handlers the UI may call (incl. delete-with-undo)
-│  ├─ windowManager.js    the window: size/position memory, Mica, Windows' own caption buttons, × = hide
-│  ├─ background.js       tray icon + menu, global hotkey, start with Windows
+│  ├─ windowManager.js    the window: size/position memory, Mica / Mac vibrancy, caption buttons, × = hide
+│  ├─ background.js       tray / menu bar icon + menu, global hotkey, start at sign-in
+│  ├─ menu.js             the Mac menu bar (Cmd+C/V, Cmd+Q, Cmd+N, Cmd+,); Windows has none
 │  ├─ notifier.js         desktop notifications before events
 │  ├─ prefs.js            non-secret settings (prefs.json) and their defaults
 │  ├─ auth.js             Google OAuth (loopback + PKCE), token refresh
-│  ├─ secureStore.js      encrypts tokens/keys with Windows DPAPI (Electron safeStorage)
+│  ├─ secureStore.js      encrypts tokens/keys with Windows DPAPI / the macOS Keychain (Electron safeStorage)
 │  ├─ calendar.js         Calendar API: calendars, events, create/update/delete, colors, reminders, Meet
 │  ├─ tasks.js            Google Tasks API: lists, tasks due/overdue/undated, add, complete, delete
 │  ├─ freetime.js         working-hours free time for the assistant (pure functions, unit-tested)
@@ -143,7 +171,7 @@ src/
 │  ├─ sync.js             optional: shares some settings with the iPhone app (Settings → Account → Phone app)
 │  └─ assistant.js        assistant: tools, profile prompt, caching, cost tracking, the tool-use loop
 ├─ preload.js             the bridge: exposes window.desk.* to the page, nothing else
-├─ assets/                app icon (icon.svg is the source) + Fluent UI icons (MIT)
+├─ assets/                app icon (icon.svg is the source), Mac menu bar icon + Fluent UI icons (MIT)
 └─ renderer/              ← FRONTEND (sandboxed web page). No Node, no secrets.
    ├─ index.html          layout (title bar, toolbar, sidebar, views, panels, dialogs)
    ├─ styles.css          dark theme (colors and sizes are variables at the top)
@@ -167,9 +195,10 @@ docs/
 ├─ TROUBLESHOOTING.md     common problems and fixes
 ├─ UI-SPEC.md, ui/        design history: the original UI spec and questionnaire (older screenshots)
 └─ screenshots/           README images (made-up sample data)
-scripts/                  icons, the cost benchmark (bench.ps1 → bench-assistant.js)
+scripts/                  icons, the cost benchmark (bench.ps1 / bench.sh → bench-assistant.js)
 test/                     unit/ (node --test) and electron/run.js (assistant + UI tests)
-build/icon.ico            installer icon
+build/                    icon.ico (Windows installer) and icon.png (made into the Mac app icon)
+.github/workflows/        runs the tests on Windows and macOS on every push
 
 Optional iPhone app (SETUP-IPHONE.md):
 mobile/                   the phone app: plain HTML/CSS/JS, no build step (views, sheets, service worker)
@@ -182,11 +211,16 @@ How a drag flows: `interactions.js` calls `desk.updateEvent(...)` → `preload.j
 
 ## Where your secrets live
 
+The app-data folder is:
+
+- **Windows**: `%APPDATA%\desk-calendar\` (from source) or `%APPDATA%\Desk Calendar\` (installed)
+- **Mac**: `~/Library/Application Support/desk-calendar/` (from source) or `~/Library/Application Support/Desk Calendar/` (built app)
+
 | What | Where | Protection |
 |---|---|---|
-| `credentials.json` (your OAuth client) | `%APPDATA%\desk-calendar\` (dev) or `%APPDATA%\Desk Calendar\` (installed) | Outside the repo; `.gitignore` blocks it if you put one in the project |
-| Google access/refresh token | same folder, `google-token.bin` | Encrypted with DPAPI, tied to your Windows account |
-| AI API keys | same folder, `anthropic-key.bin`, `assistant-key-<provider>.bin` | Encrypted with DPAPI |
+| `credentials.json` (your OAuth client) | the app-data folder | Outside the repo; `.gitignore` blocks it if you put one in the project |
+| Google access/refresh token | same folder, `google-token.bin` | Encrypted by the OS: DPAPI (your Windows account) or a key in your Mac's Keychain |
+| AI API keys | same folder, `anthropic-key.bin`, `assistant-key-<provider>.bin` | Encrypted the same way |
 | Preferences, your "About you" profile, window position | same folder, `prefs.json`, `window.json` | Not secret (plain JSON, no keys) |
 
 Nothing secret is ever written in plain text, and none of it is inside the project folder.
@@ -225,7 +259,11 @@ Most everyday options are in the app's **Settings** page. For deeper changes:
   tasks appear in the sidebar and Agenda, not in the hour grid. Moving a task to another list isn't supported by the API.
 - Events you've declined are hidden, like in Google Calendar.
 - Deleting shows **"Event deleted · Undo"** for 6 seconds before it's really deleted. Quitting from the
-  tray finishes pending deletes; killing the process (Ctrl+C in a terminal) within those 6 seconds cancels them.
+  tray / menu bar (or Cmd+Q) finishes pending deletes; killing the process (Ctrl+C in a terminal) within those
+  6 seconds cancels them.
 - The assistant's quality depends on the model. Small local models sometimes pick the wrong event or
   skip a tool call; larger hosted models are more dependable. Deletes are always undoable.
 - Windows shows notifications for the installed app; while running from `npm start` they may not appear.
+  On a Mac they appear in both cases (labelled "Electron" when running from source); allow them when macOS asks.
+- Closing the window (× or the red button) keeps Desk Calendar running in the tray / menu bar so reminders still
+  arrive. On a Mac, click its Dock icon to bring the window back.
