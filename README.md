@@ -159,6 +159,7 @@ docs/
 ├─ ASSISTANT.md           choosing and setting up an AI provider, planning with tasks
 ├─ COST.md                measured cost per message (from scripts/bench-assistant.js)
 ├─ TROUBLESHOOTING.md     common problems and fixes
+├─ MAC-TEST-PLAN.md       hands-on Mac test for a person + an AI coding agent; writes mac-test-report.md
 ├─ UI-SPEC.md, ui/        design history: the original UI spec and questionnaire (older screenshots)
 └─ screenshots/           README images (made-up sample data)
 scripts/                  icons, the cost benchmark (bench.ps1 / bench.sh → bench-assistant.js)

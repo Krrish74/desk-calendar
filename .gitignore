@@ -27,3 +27,7 @@ Thumbs.db
 !.dev.vars.example
 .wrangler/
 worker/node_modules/
+
+# --- Mac test reports (docs/MAC-TEST-PLAN.md): sent to the maintainer, not committed ---
+mac-test-report.md
+mac-test-shots/
