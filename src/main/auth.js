@@ -102,11 +102,16 @@ async function restoreSession() {
 
 const escapeHtml = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
-// A second click on "Sign in" while the browser is still open joins the same attempt
-// instead of starting another server and browser tab.
+// A second click on "Sign in" while an attempt is running joins that attempt instead of
+// starting another server, and opens its Google page again (in case that tab was closed).
 let signingIn = null;
+let signInUrl = null;
 function signIn() {
-  if (!signingIn) signingIn = startSignIn().finally(() => { signingIn = null; });
+  if (signingIn) {
+    if (signInUrl) shell.openExternal(signInUrl).catch(() => {});
+    return signingIn;
+  }
+  signingIn = startSignIn().finally(() => { signingIn = null; signInUrl = null; });
   return signingIn;
 }
 
@@ -172,6 +177,7 @@ function startSignIn() {
           code_challenge_method: CodeChallengeMethod.S256,
           code_challenge: pkce.codeChallenge,
         });
+        signInUrl = authUrl;
         await shell.openExternal(authUrl); // your default browser, not an embedded window
       } catch (err) {
         server.close();
