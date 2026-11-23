@@ -1,0 +1,97 @@
+# Builds ready-to-install downloads and puts them on the repository's Releases page:
+#   Desk-Calendar-Setup-<version>.exe      Windows 10 / 11 installer
+#   Desk-Calendar-<version>-arm64.dmg      Mac with Apple Silicon (M1 and newer)
+#   Desk-Calendar-<version>-x64.dmg        Mac with an Intel processor
+#
+# Runs when a version tag like v1.0.1 is pushed (scripts/publish-github.ps1 -Release does that), or by hand from
+# the Actions tab. The tag must match "version" in package.json. Nothing secret is used: the apps hold no keys
+# and every user loads their own Google credentials.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write # create the release and attach the files
+
+jobs:
+  build:
+    name: Build (${{ matrix.os }})
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            args: --win nsis
+          - os: macos-latest
+            args: --mac dmg --arm64 --x64
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - name: Tag matches package.json
+        if: github.ref_type == 'tag'
+        shell: bash
+        run: |
+          v=$(node -p "require('./package.json').version")
+          [ "${GITHUB_REF_NAME}" = "v$v" ] || { echo "Tag ${GITHUB_REF_NAME} doesn't match package.json version $v"; exit 1; }
+      - run: npm ci
+      - name: Build
+        run: npx electron-builder ${{ matrix.args }} --publish never
+      - uses: actions/upload-artifact@v7
+        with:
+          name: build-${{ runner.os }}
+          path: |
+            dist/*.exe
+            dist/*.dmg
+          if-no-files-found: error
+          retention-days: 3
+
+  release:
+    name: Publish the release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v7
+        with:
+          path: out
+          merge-multiple: true
+      - name: Create or update the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          v="v$(node -p "require('./package.json').version")"
+          ls -la out
+          cat > notes.md <<'EOF'
+          ## Download
+
+          | Your computer | File |
+          |---|---|
+          | **Windows 10 / 11** | `Desk-Calendar-Setup-…exe` |
+          | **Mac with Apple Silicon** (M1 and newer) | `Desk-Calendar-…-arm64.dmg` |
+          | **Mac with Intel** | `Desk-Calendar-…-x64.dmg` |
+
+          Not sure which Mac you have? Apple menu → **About This Mac**: "Chip Apple M…" is Apple Silicon.
+
+          - **Windows**: run the installer. SmartScreen says "Windows protected your PC" because it isn't signed:
+            click **More info → Run anyway**.
+          - **Mac**: open the `.dmg` and drag Desk Calendar into Applications. The first time, macOS says it
+            "could not verify" the app because it isn't signed with an Apple Developer ID: open **System Settings →
+            Privacy & Security** and click **Open Anyway**.
+
+          Then connect your Google account: see "Download the app" in
+          [SETUP-WINDOWS.md](REPO_URL/blob/main/SETUP-WINDOWS.md#download-the-app-easiest) or
+          [SETUP-MAC.md](REPO_URL/blob/main/SETUP-MAC.md#download-the-app-easiest).
+          EOF
+          sed -i "s#REPO_URL#${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}#g" notes.md
+          if gh release view "$v" >/dev/null 2>&1; then
+            gh release upload "$v" out/* --clobber
+          else
+            gh release create "$v" out/* --title "Desk Calendar $v" --notes-file notes.md
+          fi

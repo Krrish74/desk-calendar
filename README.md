@@ -30,14 +30,16 @@ model through Ollama, or any OpenAI-compatible server).
 
 ## Get started
 
-Pick your computer. Each guide is complete on its own, from installing the tools to a normal app in your
-Start menu / Applications folder (about 20 minutes, most of it creating your Google sign-in).
+**Download the app** from the **[latest release](../../releases/latest)** (no Node.js or other tools needed),
+then follow the guide for your computer. Each guide is complete on its own: installing, connecting your Google
+account (about 10 minutes, once), and everyday use. They also cover running from the source code.
 
-| | Guide | You get |
+| | Download | Guide |
 |---|---|---|
-| **Windows 10 / 11** | **[SETUP-WINDOWS.md](SETUP-WINDOWS.md)** | An installer (`.exe`), tray icon, Ctrl+Shift+Space, Mica on Windows 11 |
-| **Mac** (macOS 12+, Apple Silicon or Intel) | **[SETUP-MAC.md](SETUP-MAC.md)** | A `.dmg` to drag into Applications, menu bar icon, Cmd shortcuts, Keychain |
-| **iPhone** (optional, add-on) | **[SETUP-IPHONE.md](SETUP-IPHONE.md)** | A Home Screen app with reminders; set it up from either computer |
+| **Windows 10 / 11** | `Desk-Calendar-Setup-<version>.exe` | **[SETUP-WINDOWS.md](SETUP-WINDOWS.md)** |
+| **Mac with Apple Silicon** (M1 and newer) | `Desk-Calendar-<version>-arm64.dmg` | **[SETUP-MAC.md](SETUP-MAC.md)** |
+| **Mac with Intel** | `Desk-Calendar-<version>-x64.dmg` | **[SETUP-MAC.md](SETUP-MAC.md)** |
+| **iPhone** (optional, add-on) | nothing to download | **[SETUP-IPHONE.md](SETUP-IPHONE.md)**: a Home Screen app with reminders, set up from either computer |
 
 Both desktop guides use the same Google step, **[SETUP-GOOGLE.md](SETUP-GOOGLE.md)**, and the same code: a fix or
 new feature reaches Windows and Mac at the same time.
@@ -80,10 +82,14 @@ requests against a made-up week, a few cents in total, results written to [docs/
 
 ## Building the app
 
-`npm run dist` builds for the computer you run it on: an installer on Windows, `.dmg` files on a Mac. The steps,
+Ready-made downloads are on the **[Releases](../../releases)** page, built by GitHub Actions
+(`.github/workflows/release.yml`) whenever a version tag such as `v1.0.1` is pushed. To make a new release: raise
+`"version"` in `package.json`, commit, and push the matching tag (`git tag v1.0.1` then `git push origin v1.0.1`).
+
+To build on your own computer, `npm run dist` makes an installer on Windows and `.dmg` files on a Mac. The steps,
 and what to click when Windows SmartScreen or macOS Gatekeeper warns about an unsigned app, are in
-[SETUP-WINDOWS.md](SETUP-WINDOWS.md#5-install-it-as-a-normal-app-recommended) and
-[SETUP-MAC.md](SETUP-MAC.md#5-install-it-as-a-normal-app-recommended).
+[SETUP-WINDOWS.md](SETUP-WINDOWS.md#5-build-your-own-installer-optional) and
+[SETUP-MAC.md](SETUP-MAC.md#5-build-your-own-app-optional).
 
 Only `src/` and `package.json` (plus dependencies) go into the package, so a `credentials.json` sitting in
 the project folder is **not** shipped. Each installed copy loads its own credentials on first run.
@@ -158,7 +164,7 @@ docs/
 scripts/                  icons, the cost benchmark (bench.ps1 / bench.sh → bench-assistant.js)
 test/                     unit/ (node --test) and electron/run.js (assistant + UI tests)
 build/                    icon.ico (Windows installer) and icon.png (made into the Mac app icon)
-.github/workflows/        runs the tests on Windows and macOS on every push
+.github/workflows/        test.yml: tests on Windows and macOS on every push; release.yml: builds the downloads
 
 Optional iPhone app (SETUP-IPHONE.md):
 mobile/                   the phone app: plain HTML/CSS/JS, no build step (views, sheets, service worker)

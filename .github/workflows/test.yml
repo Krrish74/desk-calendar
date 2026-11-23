@@ -4,6 +4,7 @@ name: Tests
 
 on:
   push:
+    branches: ['**'] # not for version tags: release.yml builds those
   pull_request:
   workflow_dispatch:
 

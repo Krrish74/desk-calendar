@@ -1,11 +1,47 @@
 # Desk Calendar on a Mac
 
-Everything for **macOS 12 (Monterey) or newer**, on Apple Silicon (M1 and newer) or Intel, start to finish
-(about 20 minutes, most of it the Google step). On Windows? Use **[SETUP-WINDOWS.md](SETUP-WINDOWS.md)** instead.
+Everything for **macOS 12 (Monterey) or newer**, on Apple Silicon (M1 and newer) or Intel. On Windows? Use
+**[SETUP-WINDOWS.md](SETUP-WINDOWS.md)** instead.
+
+There are two ways in. Most people want the first.
+
+- **[Download the app](#download-the-app-easiest)**: a `.dmg`, nothing else to install (about 15 minutes, most of
+  it creating your Google sign-in).
+- **[Run it from the source code](#run-it-from-the-source-code)**: for changing the code (about 20 minutes).
+
+## Download the app (easiest)
+
+1. Find out which Mac you have: Apple menu → **About This Mac**. "Chip Apple M…" is **Apple Silicon**;
+   "Processor Intel…" is **Intel**.
+2. Open the **[latest release](../../releases/latest)** (the repository's **Releases** page) and download:
+   - **`Desk-Calendar-<version>-arm64.dmg`** for Apple Silicon, or
+   - **`Desk-Calendar-<version>-x64.dmg`** for Intel.
+3. Open the `.dmg` and drag **Desk Calendar** into **Applications**. Open it from Launchpad or the Applications
+   folder.
+4. The first time, macOS says it **"could not verify"** Desk Calendar, because the app isn't signed with an Apple
+   Developer ID. Click **Done**, open **System Settings → Privacy & Security**, scroll down and click
+   **Open Anyway** next to Desk Calendar, then **Open Anyway** again and enter your password. (Only needed once.)
+5. Create your Google sign-in once (about 10 minutes): follow **[SETUP-GOOGLE.md](SETUP-GOOGLE.md)**. You end up
+   with a `credentials.json` file in your Downloads folder. If you already did this on a Windows PC, reuse the
+   same file (AirDrop it or email it to yourself).
+6. In Desk Calendar, click **Load credentials.json…** and pick that file, then click **Sign in with Google**.
+   Your browser opens: pick your account, click **Continue** on the "Google hasn't verified this app" screen, and
+   allow Calendar and Tasks.
+7. macOS asks whether Desk Calendar may use its key in your **Keychain** (that's where your sign-in is
+   encrypted): enter your Mac password and click **Always Allow**. If it asks about notifications, click
+   **Allow**. Your calendar appears.
+8. Optional: **Settings → Assistant**, pick a provider and paste its API key. Several are free; see
+   **[docs/ASSISTANT.md](docs/ASSISTANT.md)**.
+
+**Updating:** download the newer `.dmg` from the Releases page and drag it into Applications, replacing the old
+copy; your settings and sign-in stay. Uninstall by dragging Desk Calendar from Applications to the Bin. Then skip
+down to [Using it on a Mac](#using-it-on-a-mac).
+
+## Run it from the source code
 
 Commands below are typed in **Terminal**: press **Cmd+Space**, type `Terminal`, and press Return.
 
-## 1. Install the tools (once)
+### 1. Install the tools (once)
 
 1. **Node.js 22 or newer**: download the **LTS** macOS installer (`.pkg`) from <https://nodejs.org/> and open it.
    (Using Homebrew? `brew install node` works too.)
@@ -24,7 +60,7 @@ Commands below are typed in **Terminal**: press **Cmd+Space**, type `Terminal`, 
 
    It should print `v22` or higher.
 
-## 2. Download Desk Calendar
+### 2. Download the code
 
 ```shell
 cd ~/Documents
@@ -47,13 +83,13 @@ Replace `<repository URL>` with the address from the green **Code** button on th
 password: use a **personal access token** as the password (GitHub → Settings → Developer settings → Personal access
 tokens), or sign in once with GitHub Desktop or `gh auth login` and Git uses that.
 
-## 3. Create your Google sign-in (once, ~10 minutes)
+### 3. Create your Google sign-in (once, ~10 minutes)
 
 Follow **[SETUP-GOOGLE.md](SETUP-GOOGLE.md)**. You end up with a `credentials.json` file in your Downloads folder.
 Everyone uses their own Google Cloud project, so nobody shares keys. If you already did this on a Windows PC, reuse
 the same `credentials.json` (AirDrop it or email it to yourself).
 
-## 4. Start the app
+### 4. Start the app
 
 ```shell
 npm start
@@ -72,16 +108,16 @@ Desk Calendar.
 Optional: **Settings → Assistant**, pick a provider and paste its API key. Several are free; see
 **[docs/ASSISTANT.md](docs/ASSISTANT.md)**. On Apple Silicon, a local model through Ollama works well too.
 
-## 5. Install it as a normal app (recommended)
+### 5. Build your own app (optional)
 
 ```shell
 npm run dist
 ```
 
-This makes two disk images in `dist/`:
+This makes two disk images in `dist/`, the same as on the Releases page but from your copy of the code:
 
-- `Desk Calendar-1.0.0-arm64.dmg` for Apple Silicon Macs (M1 and newer)
-- `Desk Calendar-1.0.0.dmg` for Intel Macs
+- `Desk-Calendar-1.0.0-arm64.dmg` for Apple Silicon Macs (M1 and newer)
+- `Desk-Calendar-1.0.0-x64.dmg` for Intel Macs
 
 (Not sure which you have? Apple menu → **About This Mac**: "Chip Apple M…" is Apple Silicon, "Processor Intel…" is
 Intel.) Open the one for your Mac and drag **Desk Calendar** into **Applications**, then open it from Launchpad or
@@ -109,7 +145,7 @@ Calendar/` for the built app (in Finder: **Go → Go to Folder…** and paste th
 keys there are encrypted with a key kept in your Keychain; nothing secret is in the project folder. To start fresh,
 quit with Cmd+Q and delete that folder.
 
-## Updating
+### Updating the source code
 
 ```shell
 cd ~/Documents/desk-calendar && git pull && npm install

@@ -30,7 +30,8 @@
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true
+      "createDesktopShortcut": true,
+      "artifactName": "Desk-Calendar-Setup-${version}.${ext}"
     },
     "mac": {
       "target": [
@@ -49,7 +50,8 @@
       "darkModeSupport": true
     },
     "dmg": {
-      "title": "Desk Calendar"
+      "title": "Desk Calendar",
+      "artifactName": "Desk-Calendar-${version}-${arch}.${ext}"
     }
   },
   "dependencies": {
