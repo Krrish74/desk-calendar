@@ -57,12 +57,22 @@ const listeners = [];
 /** Call fn(changes) after every set() (sync.js uses it to send shared settings to the phone app). */
 const onChange = (fn) => { listeners.push(fn); };
 
+/**
+ * Write a file so a crash or power cut mid-write can't leave it half-written (which would
+ * silently reset every setting): write a temporary copy, then swap it in.
+ */
+function writeFileAtomic(target, text) {
+  fs.mkdirSync(path.dirname(target), { recursive: true });
+  const tmp = `${target}.${process.pid}.tmp`;
+  fs.writeFileSync(tmp, text);
+  fs.renameSync(tmp, target);
+}
+
 function set(changes) {
   cache = { ...all(), ...changes };
-  fs.mkdirSync(app.getPath('userData'), { recursive: true });
-  fs.writeFileSync(file(), JSON.stringify(cache, null, 2));
+  writeFileAtomic(file(), JSON.stringify(cache, null, 2));
   for (const fn of listeners) fn(changes);
   return cache;
 }
 
-module.exports = { all, get, set, onChange, DEFAULTS };
+module.exports = { all, get, set, onChange, DEFAULTS, writeFileAtomic };

@@ -22,7 +22,7 @@
 // installs the new files and removes the old copy.
 
 // BEGIN GENERATED (worker/scripts/build-mobile-assets.mjs)
-const VERSION = 'bda12f70388a';
+const VERSION = '9867ac6ec446';
 const SHELL_FILES = [
   "/",
   "/about",
@@ -183,8 +183,11 @@ self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   const { url, meetLink } = event.notification.data || {};
   event.waitUntil((async () => {
-    if (event.action === 'join' && meetLink) return self.clients.openWindow(meetLink);
-    const target = new URL(url || '/', self.location.origin).href;
+    // Join: only an https meeting link. Anything else opens this app, never another site.
+    if (event.action === 'join' && /^https:\/\//i.test(meetLink || '')) return self.clients.openWindow(meetLink);
+    let target = new URL(url || '/', self.location.origin);
+    if (target.origin !== self.location.origin) target = new URL('/', self.location.origin);
+    target = target.href;
     // App already open? Bring it forward and tell it which event to show.
     const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
     const open = windows.find((w) => new URL(w.url).origin === self.location.origin);

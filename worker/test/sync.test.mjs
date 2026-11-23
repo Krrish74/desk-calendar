@@ -39,7 +39,10 @@ globalThis.fetch = async (u, init) => {
   calls++;
   u = String(u);
   if (u.startsWith('https://oauth2.googleapis.com/tokeninfo')) {
-    const t = tokens[new URL(u).searchParams.get('access_token')];
+    // The token must come in the POST body, never in the URL (where logs could keep it).
+    assert.equal(new URL(u).search, '', 'no token in the URL');
+    assert.equal(init?.method, 'POST');
+    const t = tokens[new URLSearchParams(String(init.body)).get('access_token')];
     return t ? new Response(JSON.stringify({ aud: t.aud, azp: t.aud, scope: 'https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/tasks', expires_in: 3000 }))
       : new Response(JSON.stringify({ error: 'invalid_token' }), { status: 400 });
   }

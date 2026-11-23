@@ -90,10 +90,14 @@ async function updatePreview() {
   p.classList.add('ok');
 }
 
+let quickBusy = false;
 $('quick').addEventListener('submit', async (e) => {
   e.preventDefault();
   const text = $('quick-input').value.trim();
-  if (!text) return;
+  // Enter pressed twice before Google answers would add the event twice.
+  if (!text || quickBusy) return;
+  quickBusy = true;
+  $('quick-input').readOnly = true;
   try {
     const created = unwrap(await desk.quickAdd(text));
     $('quick-input').value = '';
@@ -102,7 +106,12 @@ $('quick').addEventListener('submit', async (e) => {
     // Jump to the new event's day/week and flash it.
     state.highlightId = created.id;
     goToDate(new Date(created.start));
-  } catch (err) { status(err.message, true); }
+  } catch (err) {
+    status(err.message, true);
+  } finally {
+    quickBusy = false;
+    $('quick-input').readOnly = false;
+  }
 });
 
 // ============================================================================
@@ -161,8 +170,9 @@ function calendarRow(cal) {
   box.checked = cal.visible;
   box.style.setProperty('--cal', cal.color);
   box.onchange = async () => {
+    const res = await desk.setCalendarVisible(cal.id, box.checked);
+    if (res.error) { box.checked = !box.checked; status(res.error, true); return; }
     cal.visible = box.checked;
-    await desk.setCalendarVisible(cal.id, box.checked);
     loadEvents();
   };
   label.append(box, el('span', '', cal.name));

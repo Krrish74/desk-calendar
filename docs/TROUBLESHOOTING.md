@@ -120,4 +120,16 @@ tasks by day.
 
 ### Assistant
 
-See the table at the end of [ASSISTANT.md](ASSISTANT.md#problems).
+**"This message already made 3 changes…" / the assistant asks before changing a meeting.** That's the safety limit
+(see [ASSISTANT.md](ASSISTANT.md#safety-limits)): reply "yes" and it does the rest.
+
+**iPhone: "The assistant has used its monthly limit".** It resets next month, or raise `ASSISTANT_MONTHLY_LIMIT_USD`
+on the Worker (SETUP-IPHONE.md, step 6).
+
+See the table at the end of [ASSISTANT.md](ASSISTANT.md#problems) for anything else.
+
+### Phone app link
+
+**What the desktop app sends to the phone app's server.** To prove it's you, the desktop app sends its Google sign-in
+(an access token, valid for about an hour) to the address in Settings → Account → Phone app, which must be `https://`.
+Only enter the address of your own Worker.

@@ -100,7 +100,17 @@ async function restoreSession() {
 // Interactive sign-in
 // ---------------------------------------------------------------------------
 
+const escapeHtml = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+
+// A second click on "Sign in" while the browser is still open joins the same attempt
+// instead of starting another server and browser tab.
+let signingIn = null;
 function signIn() {
+  if (!signingIn) signingIn = startSignIn().finally(() => { signingIn = null; });
+  return signingIn;
+}
+
+function startSignIn() {
   return new Promise((resolve, reject) => {
     const state = crypto.randomBytes(16).toString('hex'); // anti-forgery value
     let oauth, verifier;
@@ -112,10 +122,12 @@ function signIn() {
       const finish = (ok, message) => {
         res.writeHead(ok ? 200 : 400, { 'Content-Type': 'text/html; charset=utf-8' });
         res.end(`<body style="font-family:Segoe UI,-apple-system,sans-serif;background:#111;color:#eee;padding:40px">
-          <h2>${ok ? '✅ Signed in' : '❌ Sign-in failed'}</h2><p>${message}</p></body>`);
+          <h2>${ok ? '✅ Signed in' : '❌ Sign-in failed'}</h2><p>${escapeHtml(message)}</p></body>`);
         server.close();
       };
 
+      // Not Google's redirect (a stray request, a browser prefetch): ignore it and keep waiting.
+      if (!url.searchParams.has('state')) { res.writeHead(404).end(); return; }
       if (url.searchParams.get('state') !== state) {
         finish(false, 'State mismatch. Please try again from the app.');
         return reject(new Error('OAuth state mismatch'));
@@ -143,6 +155,7 @@ function signIn() {
       }
     });
 
+    server.on('error', (err) => reject(new Error(`Couldn't start the sign-in: ${err.message}`)));
     // Port 0 = "any free port". Google allows any port on a loopback redirect.
     server.listen(0, '127.0.0.1', async () => {
       try {

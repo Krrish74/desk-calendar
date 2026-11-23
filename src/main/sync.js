@@ -20,6 +20,8 @@
 // others this PC's values are sent. After that, the most recent change wins.
 // Changes made while offline are remembered (prefs.syncDirty) and sent next time.
 
+const { isValid } = require('./prefcheck');
+
 const SHARED_KEYS = [
   'calendarVisibility', 'taskListVisibility', 'defaultCalendarId', 'defaultTaskListId',
   'defaultEventMinutes', 'timeFormat', 'weekStartsOn', 'notifyMinutes', 'userProfile',
@@ -78,15 +80,29 @@ function createSync({ prefs, getToken, fetch: fetchFn = globalThis.fetch, onAppl
     return data;
   }
 
-  /** Write the server's values here; tell the app which ones actually changed. */
+  /**
+   * Write the server's values here; tell the app which ones actually changed. Skipped: values
+   * that aren't valid for the setting, and settings changed here that haven't been sent yet
+   * (they're newer than what the server has).
+   */
   function apply(values) {
     const changes = {};
-    for (const k of SHARED_KEYS) if (k in values && !same(values[k], prefs.get(k))) changes[k] = values[k];
+    const dirty = new Set(prefs.get('syncDirty') || []);
+    for (const k of SHARED_KEYS) {
+      if (!values || !(k in values) || dirty.has(k) || same(values[k], prefs.get(k))) continue;
+      if (isValid(k, values[k])) changes[k] = values[k];
+    }
     if (!Object.keys(changes).length) return [];
     applying = true;
     try { prefs.set(changes); } finally { applying = false; }
     onApplied(Object.keys(changes));
     return Object.keys(changes);
+  }
+
+  /** After sending `sent`, forget the keys that haven't changed again since. */
+  function markSent(sent) {
+    const still = (prefs.get('syncDirty') || []).filter((k) => !(k in sent) || !same(sent[k], prefs.get(k)));
+    prefs.set({ syncDirty: still });
   }
 
   /** Send local changes, then take the server's copy. Safe to call any time. */
@@ -102,18 +118,22 @@ function createSync({ prefs, getToken, fetch: fetchFn = globalThis.fetch, onAppl
             .filter((k) => !server.setOnServer.includes(k) && prefs.get(k) !== null && prefs.get(k) !== undefined)
             .map((k) => [k, prefs.get(k)]));
           const merged = Object.keys(mine).length ? await request('PATCH', mine) : server;
+          markSent(mine);
           apply(merged.values);
-          prefs.set({ syncLinked: true, syncDirty: [] });
+          prefs.set({ syncLinked: true });
         } else {
           const dirty = (prefs.get('syncDirty') || []).filter((k) => SHARED_KEYS.includes(k));
           if (dirty.length) {
-            await request('PATCH', Object.fromEntries(dirty.map((k) => [k, prefs.get(k)])));
-            prefs.set({ syncDirty: [] });
+            const sent = Object.fromEntries(dirty.map((k) => [k, prefs.get(k)]));
+            await request('PATCH', sent);
+            markSent(sent); // a key changed again meanwhile stays dirty and goes next time
           }
           apply((await request('GET')).values);
         }
         prefs.set({ syncLastAt: Date.now() });
         lastError = '';
+        // Something changed here while this ran: send it soon.
+        if ((prefs.get('syncDirty') || []).length) { clearTimeout(pushTimer); pushTimer = setTimeout(syncNow, PUSH_DELAY_MS); }
       } catch (err) {
         lastError = err.message;
       }

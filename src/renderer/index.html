@@ -412,12 +412,13 @@
         </div>
         <label>List <select id="tf-list"></select></label>
         <label>Notes <textarea id="tf-notes" rows="3"></textarea></label>
+        <p id="task-editor-error" class="error-text" role="alert" hidden></p>
       </div>
       <div class="dialog-buttons">
         <button type="button" id="btn-task-delete" class="btn danger">Delete</button>
         <span class="spacer"></span>
         <button type="button" id="btn-task-cancel" class="btn">Cancel</button>
-        <button type="submit" class="btn primary">Save</button>
+        <button type="submit" id="btn-task-save" class="btn primary">Save</button>
       </div>
     </form>
   </dialog>
@@ -427,7 +428,7 @@
       <h2 id="editor-heading">Event</h2>
       <div class="ed-body">
         <p id="editor-readonly" class="muted" hidden>View only: you can't edit this calendar.</p>
-        <label>Title <input id="f-title" required /></label>
+        <label>Title <input id="f-title" placeholder="(No title)" /></label>
         <label class="row"><input type="checkbox" id="f-allday" /> All day</label>
         <div class="grid2">
           <label>Start date <input type="date" id="f-sdate" required /></label>
@@ -452,6 +453,7 @@
 
         <label>Location <input id="f-location" /></label>
         <label>Notes <textarea id="f-desc" rows="3"></textarea></label>
+        <p id="editor-error" class="error-text" role="alert" hidden></p>
       </div>
       <div class="dialog-buttons">
         <button type="button" id="btn-delete" class="btn danger">Delete</button>

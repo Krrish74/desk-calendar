@@ -117,6 +117,7 @@ function actionCard(a) {
 }
 
 let chatBusy = false;
+let chatEpoch = 0; // bumped when the chat is cleared: a reply still on its way then isn't shown
 
 async function sendChat(text) {
   text = text.trim();
@@ -124,13 +125,20 @@ async function sendChat(text) {
   // in the box (send it once the reply is in).
   if (!text || chatBusy) return;
   chatBusy = true;
+  const epoch = chatEpoch;
   $('chat-chips')?.remove();
   $('chat-input').value = '';
   addMsg('user', text);
   const pending = addMsg('bot', 'Thinking…', 'thinking');
   $('chat-send').disabled = true;
   try {
-    const { reply, actions, freshStart } = unwrap(await desk.chatSend(text));
+    const { reply, actions, freshStart, undoMs } = unwrap(await desk.chatSend(text));
+    if (epoch !== chatEpoch) {
+      // The chat was cleared meanwhile: don't put this reply into the new conversation, but
+      // still offer Undo for anything it deleted.
+      offerUndo((actions || []).filter((a) => a.kind === 'deleted' && a.token), null, undoMs);
+      return;
+    }
     if (freshStart) {
       // The backend started a new conversation (long pause or a long chat), so earlier
       // messages are no longer remembered. Say so where it happened.
@@ -142,7 +150,7 @@ async function sendChat(text) {
       const cards = el('div', 'action-cards');
       for (const a of actions) cards.append(actionCard(a));
       $('chat-log').append(cards);
-      offerUndo(actions.filter((a) => a.kind === 'deleted' && a.token), cards);
+      offerUndo(actions.filter((a) => a.kind === 'deleted' && a.token), cards, undoMs);
     }
   } catch (err) {
     pending.textContent = err.message;
@@ -159,14 +167,14 @@ async function sendChat(text) {
  * The assistant deletes without asking; instead you get the same "Undo" toast as
  * deleting from the calendar. The backend starts the countdown when this reply arrives.
  */
-function offerUndo(deleted, cards) {
+function offerUndo(deleted, cards, ms) {
   if (!deleted.length) return;
   const label = deleted.length === 1 ? `Deleted “${deleted[0].title}”` : `Deleted ${deleted.length} items`;
   showToast(label, 'Undo', async () => {
     let restored = 0;
     for (const a of deleted) if ((await desk.undoDelete(a.token)).data) restored++;
     status(restored ? `Restored ${restored === 1 ? `“${deleted[0].title}”` : `${restored} events`}` : 'Too late to undo.', !restored);
-    if (restored) {
+    if (restored && cards) {
       for (const card of cards.querySelectorAll('.action-card.deleted')) {
         card.classList.replace('deleted', 'restored');
         card.querySelector('b').textContent = card.querySelector('b').textContent.replace(/^Deleted/, 'Restored');
@@ -174,7 +182,7 @@ function offerUndo(deleted, cards) {
       }
     }
     loadEvents(); // also reloads tasks
-  });
+  }, Math.max(6000, (Number(ms) || 6000) - 1000)); // as long as the backend's Undo window
 }
 
 $('chat-form').addEventListener('submit', (e) => { e.preventDefault(); sendChat($('chat-input').value); });
@@ -184,10 +192,21 @@ $('chat-input').addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); $('chat-form').requestSubmit(); }
 });
 
-$('btn-chat-reset').onclick = async () => {
-  await desk.chatReset();
+/** Empty the chat panel (the backend has started a new conversation). */
+function clearChat() {
+  chatEpoch++;
   $('chat-log').replaceChildren();
-  showWelcome();
+}
+
+let resetting = false;
+$('btn-chat-reset').onclick = async () => {
+  if (resetting) return; // a quick double click would show the welcome message twice
+  resetting = true;
+  try {
+    await desk.chatReset();
+    clearChat();
+    await showWelcome();
+  } finally { resetting = false; }
 };
 
 // The backend pings us when the assistant changed something.

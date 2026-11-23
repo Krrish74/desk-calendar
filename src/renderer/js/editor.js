@@ -44,7 +44,8 @@ function openEditor(ev, preset = {}) {
   // All-day ends are exclusive (midnight after the last day); show the last day instead.
   if (src.allDay) end = addDays(end, -1);
 
-  $('f-title').value = src.title || '';
+  $('f-title').value = src.untitled ? '' : (src.title || ''); // don't save "(No title)" as a real title
+  editorError('');
   $('f-allday').checked = !!src.allDay;
   $('f-sdate').value = ymd(start);
   $('f-stime').value = hm(start);
@@ -242,7 +243,27 @@ function toggleTimeInputs() {
   const allDay = $('f-allday').checked;
   for (const t of document.querySelectorAll('#editor .time')) t.hidden = allDay;
 }
-$('f-allday').onchange = toggleTimeInputs;
+$('f-allday').onchange = () => {
+  // Turning "All day" off: give it real times (the next hour, default length) instead of
+  // 00:00–00:00, which can't be saved.
+  if (!$('f-allday').checked && $('f-stime').value === $('f-etime').value && $('f-sdate').value === $('f-edate').value) {
+    const d = new Date(`${$('f-sdate').value}T00:00`);
+    const now = new Date();
+    const hour = ymd(d) === ymd(now) ? Math.min(23, now.getHours() + 1) : 9;
+    const start = atWallMinute(d, hour * 60);
+    const end = new Date(+start + state.prefs.defaultEventMinutes * 60000);
+    $('f-stime').value = hm(start);
+    $('f-edate').value = ymd(end);
+    $('f-etime').value = hm(end);
+  }
+  toggleTimeInputs();
+};
+
+/** A problem saving: shown inside the dialog (the status bar is hidden behind it). */
+function editorError(text) {
+  $('editor-error').textContent = text;
+  $('editor-error').hidden = !text;
+}
 $('btn-cancel').onclick = () => $('editor').close();
 $('btn-open-google').onclick = () => editing && desk.openUrl(editing.htmlLink);
 
@@ -267,28 +288,40 @@ $('editor-form').addEventListener('submit', async (e) => {
     ...(edMeet?.action ? { meet: edMeet.action } : {}),
   };
   if (!allDay && new Date(fields.end) <= new Date(fields.start)) {
-    status('End must be after start.', true);
+    editorError('End must be after start.');
     return;
   }
+  if (allDay && fields.end < fields.start) {
+    editorError('End date must not be before the start date.');
+    return;
+  }
+  editorError('');
+  // This save belongs to the event open now, even if the dialog is closed or reopened
+  // for another event before Google answers.
+  const target = editing;
+  const session = ++editorSession;
   $('btn-save').disabled = true;
   try {
-    const res = editing
-      ? unwrap(await desk.updateEvent({ calendarId: editing.calendarId, eventId: editing.id, ...fields }))
+    const res = target
+      ? unwrap(await desk.updateEvent({ calendarId: target.calendarId, eventId: target.id, ...fields }))
       : unwrap(await desk.createEvent({ calendarId: $('f-calendar').value, ...fields }));
-    $('editor').close();
-    if (!editing) state.highlightId = res.id;
+    if (session === editorSession) $('editor').close();
+    if (!target) state.highlightId = res.id;
     if (fields.meet === 'add' && res.meetLink) {
       showToast('Google Meet link created', 'Copy link', () => navigator.clipboard.writeText(res.meetLink));
     } else {
-      status(editing ? 'Saved' : 'Created');
+      status(target ? 'Saved' : 'Created');
     }
     loadEvents();
   } catch (err) {
-    status(err.message, true);
+    if (session === editorSession && $('editor').open) editorError(err.message);
+    else status(err.message, true);
   } finally {
     $('btn-save').disabled = false;
   }
 });
+let editorSession = 0;
+$('editor').addEventListener('close', () => { editorSession++; });
 
 // Delete: no confirm box; an "Undo" toast appears instead (see interactions.js).
 $('btn-delete').onclick = () => {

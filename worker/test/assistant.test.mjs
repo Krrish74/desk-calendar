@@ -247,3 +247,56 @@ test('profile and settings are exposed for the phone', async () => {
   assert.equal(s.profile.dayStart, '08:30');
   assert.equal(s.profileDefaults.dayStart, '09:00');
 });
+
+test('guardrail: at most 3 changes per message; the user\'s "yes" allows the rest', async () => {
+  await assistant.reset(await ctx());
+  sent.length = 0;
+  const add = (t) => ['create_task', { title: t }];
+  script = [
+    tools(add('A'), add('B'), add('C'), add('D'), add('E')),
+    say('Added A, B and C. Shall I also add D and E?'),
+    tools(add('D'), add('E')),
+    say('Added D and E.'),
+  ];
+  const r1 = await chat('add tasks A to E');
+  assert.equal(r1.actions.length, 3, 'only 3 changes without asking');
+  const held = Object.values(lastResults(sent[1])).filter((x) => x.needs_confirmation);
+  assert.equal(held.length, 2, 'the other two come back as needs_confirmation');
+  const r2 = await chat('yes please');
+  assert.equal(r2.actions.length, 2, 'after the user\'s own yes, the rest are made');
+});
+
+test('update_event: a new end alone keeps the start; moving a 3-day all-day event keeps 3 days', async () => {
+  await assistant.reset(await ctx());
+  const evs = await allEvents();
+  const gym = evs.find((e) => e.title === 'Gym');
+  const trip = evs.find((e) => e.title === 'Weekend trip');
+  const endLocal = new Date(new Date(gym.end).getTime() + 30 * 60e3);
+  const fmt = (d) => new Intl.DateTimeFormat('sv-SE', { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).format(d).replace(' ', 'T');
+  const newTripStart = ymd(new Date(Date.now() + 10 * 864e5));
+  script = [
+    tools(['update_event', { calendar_id: gym.calendarId, event_id: gym.id, end: fmt(endLocal) }]),
+    say('Extended.'),
+    tools(['update_event', { calendar_id: trip.calendarId, event_id: trip.id, start: newTripStart }]),
+    say('Moved.'),
+  ];
+  await chat('make gym 30 minutes longer');
+  await chat('move the weekend trip');
+  const after = await allEvents();
+  const gym2 = after.find((e) => e.id === gym.id);
+  assert.equal(gym2.start, gym.start, 'start unchanged');
+  assert.equal(new Date(gym2.end).getTime(), endLocal.getTime(), 'end moved');
+  const trip2 = after.find((e) => e.id === trip.id);
+  assert.equal(Math.round((new Date(trip2.end) - new Date(trip2.start)) / 864e5), 3, 'still 3 days long');
+});
+
+test('spending guardrails: a monthly cap and a per-minute limit on /api/chat', async () => {
+  const month = new Date().toISOString().slice(0, 7);
+  const c = { env: { ASSISTANT_MONTHLY_LIMIT_USD: '1' }, email: 'cap@example.com', prefs: { assistantUsage: { month, cost: 1.2 } } };
+  assert.throws(() => assistant.checkLimits(c), (e) => e.status === 429 && e.code === 'LIMIT');
+  const ok = { env: {}, email: 'speedy@example.com', prefs: {} };
+  const now = Date.now();
+  for (let i = 0; i < 10; i++) assistant.checkLimits(ok, now + i);
+  assert.throws(() => assistant.checkLimits(ok, now + 20), (e) => e.status === 429 && e.code === 'RATE_LIMIT');
+  assistant.checkLimits(ok, now + 61_000); // a minute later it's fine again
+});

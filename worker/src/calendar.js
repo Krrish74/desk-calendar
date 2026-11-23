@@ -87,30 +87,42 @@ export async function setCalendarVisible(c, id, visible) {
  * occurrences, so each one has its own id. Editing that id changes just that
  * occurrence, exactly like choosing "This event" in Google Calendar.
  */
-export async function listEvents(c, start, end) {
+const MAX_PAGES = 10; // 250 events a page: up to 2,500 per calendar per request
+
+/** onFailed(calendarName) is called for each calendar that couldn't be read (optional). */
+export async function listEvents(c, start, end, onFailed = () => {}) {
   const calendars = (await listCalendars(c)).filter((cal) => cal.visible);
 
-  // Fetch every calendar in parallel. One failing calendar shouldn't blank the
-  // whole list, so failures are logged and skipped.
+  // Fetch every calendar in parallel, page by page. One failing calendar shouldn't blank
+  // the whole list, so failures are skipped and reported.
   const perCalendar = await Promise.all(
     calendars.map(async (cal) => {
       try {
-        const data = await google(c, `/calendars/${enc(cal.id)}/events`, {
-          query: {
-            timeMin: start.toISOString(),
-            timeMax: end.toISOString(),
-            singleEvents: true,
-            orderBy: 'startTime',
-            maxResults: 250,
-          },
-        });
-        return (data.items || [])
+        const items = [];
+        let pageToken;
+        for (let page = 0; page < MAX_PAGES; page++) {
+          const data = await google(c, `/calendars/${enc(cal.id)}/events`, {
+            query: {
+              timeMin: start.toISOString(),
+              timeMax: end.toISOString(),
+              singleEvents: true,
+              orderBy: 'startTime',
+              maxResults: 250,
+              ...(pageToken ? { pageToken } : {}),
+            },
+          });
+          items.push(...(data.items || []));
+          pageToken = data.nextPageToken;
+          if (!pageToken) break;
+        }
+        return items
           .filter((e) => e.status !== 'cancelled')
           .filter((e) => !declinedByMe(e))
           .map((e) => normalize(c, e, cal));
       } catch (err) {
         if (err.code === 'NOT_SIGNED_IN') throw err; // that one isn't per-calendar
         console.warn(`Skipping a calendar: ${err.message}`);
+        onFailed(cal.name);
         return [];
       }
     }),
@@ -244,7 +256,14 @@ export async function updateEvent(c, { calendarId, eventId, title, start, end, a
   if (title !== undefined) body.summary = title;
   if (location !== undefined) body.location = location;
   if (description !== undefined) body.description = description;
-  if (start !== undefined) Object.assign(body, toGoogleTimes(c, { start, end, allDay }));
+  if (start !== undefined) {
+    // PATCH merges into what Google has, so switching between timed and all-day must clear
+    // the other kind of time explicitly (else Google keeps both and rejects the event).
+    const t = toGoogleTimes(c, { start, end, allDay });
+    const clear = allDay ? { dateTime: null, timeZone: null } : { date: null };
+    body.start = { ...t.start, ...clear };
+    body.end = { ...t.end, ...clear };
+  }
   const query = applyExtras(body, extras);
   const data = await google(c, `/calendars/${enc(calendarId)}/events/${enc(eventId)}`, { method: 'PATCH', query, body });
   return summarize(c, data);

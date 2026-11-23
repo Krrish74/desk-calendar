@@ -49,7 +49,8 @@ async function load(name) {
     const { result, shouldReEncrypt } = await safeStorage.decryptStringAsync(encrypted);
     const value = JSON.parse(result);
     // Electron may say the encryption key was rotated/upgraded: re-save with the new one.
-    if (shouldReEncrypt) await save(name, value);
+    // (If re-saving fails, the old copy still works: keep going rather than signing you out.)
+    if (shouldReEncrypt) await save(name, value).catch((err) => console.warn('[secureStore] re-encrypt failed:', err.message));
     return value;
   } catch {
     return null; // encrypted by a different user / computer, or corrupted

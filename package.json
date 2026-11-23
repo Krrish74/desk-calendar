@@ -1,6 +1,6 @@
 {
   "name": "desk-calendar",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Dark Google Calendar desktop app for Windows and macOS, with an AI assistant",
   "engines": {
     "node": ">=22"

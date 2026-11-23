@@ -214,6 +214,7 @@ async function handleApi(request, c, url) {
     // Assistant deletes don't ask first: the event is hidden right away, and the Undo
     // window starts as this reply goes out, so you have time to see it.
     case 'POST /api/chat': {
+      assistant.checkLimits(c); // spending cap and messages-per-minute (assistant.js)
       const queued = [];
       const queueDelete = async (ev) => { const t = await deletes.queueDelete(c, ev, { startNow: false }); queued.push(t); return t; };
       const [hidden, hiddenTasks] = await Promise.all([deletes.pendingKeys(c), deletes.pendingTaskKeys(c)]);
@@ -227,7 +228,7 @@ async function handleApi(request, c, url) {
       const reported = new Set(result.actions.filter((a) => a.kind === 'deleted').map((a) => a.token));
       await deletes.startDeleteTimers(c, queued.filter((t) => reported.has(t)));
       await deletes.cancelDeletes(c, queued.filter((t) => !reported.has(t)));
-      return json({ ...result, undoMs: deletes.UNDO_MS });
+      return json({ ...result, undoMs: deletes.ASSISTANT_UNDO_MS });
     }
     case 'POST /api/chat/reset':
       return json(await assistant.reset(c));

@@ -31,6 +31,8 @@ function renderView() {
   // Don't redraw under an open quick-create popover (you may be typing a title);
   // closePopover() calls us again when it closes.
   else if (openPop?.querySelector('.quick-create')) { deferredRender = true; return; }
+  // Nor in the middle of a drag (a timed refresh would drop the event you're moving).
+  else if (document.body.classList.contains('dragging')) { deferredRender = true; return; }
 
   let content;
   if (state.view === 'day') content = renderTimeGrid(1);

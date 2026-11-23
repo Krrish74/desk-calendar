@@ -96,3 +96,34 @@ test('nothing happens until an address is set; addresses are checked', async () 
   assert.equal(cleanUrl(''), '');
   assert.deepEqual(SHARED_KEYS.sort(), Object.keys(DEFAULTS).sort(), 'the shared settings');
 });
+
+test('a change made here while a sync is running is not lost (or overwritten by the server)', async () => {
+  const server = fakeServer({ ...DEFAULTS }, []);
+  const realFetch = server.fetch;
+  let changedMidway = false;
+  let prefsRef;
+  server.fetch = async (url, init) => {
+    const res = await realFetch(url, init);
+    if (init.method === 'PATCH' && !changedMidway) { changedMidway = true; prefsRef.set({ weekStartsOn: 1 }); } // user clicks again
+    return res;
+  };
+  const { prefs, sync } = setup({ syncLinked: true }, server);
+  prefsRef = prefs;
+  prefs.set({ timeFormat: '24' }); // queued to send
+  await sync.syncNow();
+  assert.equal(prefs.get('weekStartsOn'), 1, 'the server\'s older value did not overwrite it');
+  assert.deepEqual(prefs.get('syncDirty'), ['weekStartsOn'], 'still waiting to be sent');
+  await sync.syncNow();
+  assert.equal(server.values.weekStartsOn, 1, 'sent on the next sync');
+  assert.deepEqual(prefs.get('syncDirty'), []);
+});
+
+test('values from the server that aren\'t valid are ignored', async () => {
+  const server = fakeServer({ ...DEFAULTS, calendarVisibility: null, notifyMinutes: '15', weekStartsOn: 9, timeFormat: '24' }, []);
+  const { prefs, sync } = setup({ syncLinked: true }, server);
+  await sync.syncNow();
+  assert.deepEqual(prefs.get('calendarVisibility'), {}, 'null visibility map ignored');
+  assert.equal(prefs.get('notifyMinutes'), 10, 'a string number ignored');
+  assert.equal(prefs.get('weekStartsOn'), 0, 'out of range ignored');
+  assert.equal(prefs.get('timeFormat'), '24', 'valid values still applied');
+});

@@ -147,7 +147,9 @@ async function listTasks({ from, to, includeOverdue = false, includeUndated = fa
       }
       return found;
     } catch (err) {
-      if (err.code) throw err; // permission / API problems apply to every list: report them
+      // Permission, disabled API or a dead sign-in apply to every list: report them.
+      // Anything else (one list's 404, a 500, a network blip) only skips this list.
+      if (/^TASKS_|^NOT_SIGNED_IN$/.test(String(err.code)) || /invalid_grant|invalid_rapt/.test(err.message || '')) throw err;
       console.error(`[tasks] list "${list.name}" failed:`, err.message);
       return [];
     }
@@ -194,6 +196,14 @@ async function updateTask({ listId, taskId, title, notes, due, completed } = {})
   return normalize(data, list, ymd(new Date()));
 }
 
+/** One task, as listTasks returns it (used to show its real title before deleting). */
+async function getTask({ listId, taskId }) {
+  if (!listId || !taskId) throw new Error('Which task? (list id and task id are required)');
+  const list = await listFor(listId);
+  const { data } = await call((t) => t.tasks.get({ tasklist: list.id, task: taskId }));
+  return normalize(data, list, ymd(new Date()));
+}
+
 async function deleteTask({ listId, taskId }) {
   await call((t) => t.tasks.delete({ tasklist: listId, task: taskId }));
   return { deleted: true };
@@ -205,4 +215,7 @@ function checkDate(s) {
   return m[1];
 }
 
-module.exports = { listTaskLists, setListVisible, listTasks, createTask, updateTask, deleteTask, ymd };
+/** Forget cached lists (another Google account may sign in next). */
+function clearCache() { listCache = null; }
+
+module.exports = { clearCache, listTaskLists, setListVisible, listTasks, getTask, createTask, updateTask, deleteTask, ymd };

@@ -47,6 +47,17 @@ const pad = (n) => String(n).padStart(2, '0');
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 const startOfDay = (d) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; };
 const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
+
+// Hour-grid positions use the wall clock, not elapsed time: on the day clocks change for
+// daylight saving, 9:00 must still sit on the 9 AM line (it's 8 or 10 real hours after midnight).
+/** Minutes after midnight on the clock, for a time on `day` (0 before it, 1440 after it). */
+function wallMinutes(d, day) {
+  if (d <= day) return 0;
+  if (d >= addDays(day, 1)) return 24 * 60;
+  return d.getHours() * 60 + d.getMinutes();
+}
+/** The time `min` minutes after midnight on `day`, by the clock. */
+const atWallMinute = (day, min) => new Date(day.getFullYear(), day.getMonth(), day.getDate(), 0, min);
 const addMonths = (d, n) => { const x = new Date(d); x.setDate(1); x.setMonth(x.getMonth() + n); return x; };
 const sameDay = (a, b) => startOfDay(a).getTime() === startOfDay(b).getTime();
 const isToday = (d) => sameDay(d, new Date());

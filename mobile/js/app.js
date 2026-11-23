@@ -253,7 +253,9 @@ function tickCountdown() {
   $('cd-title').textContent = ev.title;
   const join = $('cd-join');
   join.hidden = !ev.meetLink;
-  if (ev.meetLink) join.href = ev.meetLink;
+  // Only https links (the same rule as openUrl): never a javascript: or other link from an invite.
+  if (ev.meetLink && /^https:\/\//i.test(ev.meetLink)) join.href = ev.meetLink;
+  else join.hidden = true;
   $('cd-progress').hidden = !pick.now;
   const time = $('cd-time');
   if (pick.now) {

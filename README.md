@@ -127,6 +127,7 @@ src/
 │  ├─ menu.js             the Mac menu bar (Cmd+C/V, Cmd+Q, Cmd+N, Cmd+,); Windows has none
 │  ├─ notifier.js         desktop notifications before events
 │  ├─ prefs.js            non-secret settings (prefs.json) and their defaults
+│  ├─ prefcheck.js        which settings the page / the phone may change, and valid values
 │  ├─ auth.js             Google OAuth (loopback + PKCE), token refresh
 │  ├─ secureStore.js      encrypts tokens/keys with Windows DPAPI / the macOS Keychain (Electron safeStorage)
 │  ├─ calendar.js         Calendar API: calendars, events, create/update/delete, colors, reminders, Meet

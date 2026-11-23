@@ -95,8 +95,8 @@ Record: did it finish, how long it took, and any `WARN` / `ERR!` lines (copy the
 npm test
 ```
 
-**Expected:** `ℹ pass 14` / `ℹ fail 0` for the unit tests, then the Electron tests ending in
-`22 passed, 0 failed` and including `✔ fits the platform (darwin)`. A test window appears and closes by itself;
+**Expected:** `ℹ pass 16` / `ℹ fail 0` for the unit tests, then the Electron tests ending in
+`32 passed, 0 failed` and including `✔ fits the platform (darwin)`. A test window appears and closes by itself;
 that's normal. Record the totals and copy any `✖` line with the few lines under it.
 
 Optional, the iPhone app's server tests (no Cloudflare account needed):

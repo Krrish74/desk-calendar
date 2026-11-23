@@ -23,7 +23,8 @@ function closeSettings() {
 $('btn-settings').onclick = openSettings;
 $('sp-back').onclick = closeSettings;
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && !$('settings-page').hidden && !e.target.closest('#s-hotkey')) closeSettings();
+  // (Esc in a dialog opened over Settings closes just the dialog.)
+  if (e.key === 'Escape' && !$('settings-page').hidden && !e.target.closest('#s-hotkey') && !document.querySelector('dialog[open]')) closeSettings();
 });
 
 // Section links on the left scroll to that section; the link highlights as you scroll.
@@ -77,13 +78,18 @@ async function fillSettings() {
   $('s-hotkey').value = hotkeyLabel;
   setHotkeyMsg(hotkeyStatus.ok ? 'Works from any app. Click the box, then press new keys.' : hotkeyStatus.error, !hotkeyStatus.ok);
 
-  renderSettingsCalendars();
-  await fillTaskListSettings(prefs);
+  // The remaining sections each load on their own: one failing (say, Tasks not connected
+  // or offline) mustn't leave the others showing "…".
+  const section = (fn) => Promise.resolve().then(fn).catch((err) => status(err.message, true));
+  await Promise.all([
+    section(renderSettingsCalendars),
+    section(() => fillTaskListSettings(prefs)),
+    section(fillAssistant),
+    section(fillAccount),
+  ]);
+}
 
-  // Assistant
-  await fillAssistant();
-
-  // Account
+async function fillAccount() {
   const account = await desk.account();
   $('s-account').textContent = account.data ? `Signed in as ${account.data}` : 'Signed in';
 }
@@ -126,8 +132,9 @@ function renderSettingsCalendars() {
     toggle.type = 'checkbox';
     toggle.checked = cal.visible;
     toggle.onchange = async () => {
+      const res = await desk.setCalendarVisible(cal.id, toggle.checked);
+      if (res.error) { toggle.checked = !toggle.checked; status(res.error, true); return; }
       cal.visible = toggle.checked;
-      await desk.setCalendarVisible(cal.id, toggle.checked);
       renderCalendarList(); // the sidebar's list too
     };
     row.append(left, toggle);
@@ -154,8 +161,9 @@ async function fillTaskListSettings(prefs) {
     toggle.type = 'checkbox';
     toggle.checked = l.visible;
     toggle.onchange = async () => {
+      const res = await desk.setTaskListVisible(l.id, toggle.checked);
+      if (res.error) { toggle.checked = !toggle.checked; status(res.error, true); return; }
       l.visible = toggle.checked;
-      await desk.setTaskListVisible(l.id, toggle.checked);
       loadTasks();
     };
     row.append(left, toggle);
@@ -318,7 +326,7 @@ function renderBlockColors() {
 async function saveProfile(changes) {
   try {
     const info = unwrap(await desk.chatSetSettings({ profile: { ...profile, ...changes } }));
-    $('chat-log').replaceChildren();
+    clearChat();
     fillProfile(info.profile);
     status('Saved. The assistant will use this from your next message.');
   } catch (e) { status(e.message, true); }
@@ -352,7 +360,7 @@ function setModelMsg(text, isError = false, isOk = false) {
 async function saveAssistant(changes, label) {
   try {
     unwrap(await desk.chatSetSettings(changes));
-    $('chat-log').replaceChildren();
+    clearChat();
     if (label) status(label);
   } catch (e) {
     status(e.message, true);
@@ -397,9 +405,24 @@ $('btn-signout').onclick = async () => {
   $('settings-page').hidden = true;
   $('toolbar').hidden = false;
   $('workspace').hidden = false;
-  state.events = []; state.soonEvents = [];
+  forgetAccountData();
   showSetup('Signed out.');
 };
+
+/**
+ * Drop everything that belonged to the signed-out account, so the next account never sees
+ * it (events, tasks, lists, calendars, the chat), and ignore replies still on their way.
+ */
+function forgetAccountData() {
+  loadSeq++;
+  taskSeq++;
+  Object.assign(state, { events: [], soonEvents: [], calendars: [], tasks: [], todayTasks: [], taskLists: [] });
+  closePopover();
+  for (const d of document.querySelectorAll('dialog[open]')) d.close();
+  clearChat();
+  renderCalendarList();
+  renderTodayTasks();
+}
 
 $('btn-replace-creds').onclick = async () => {
   try {

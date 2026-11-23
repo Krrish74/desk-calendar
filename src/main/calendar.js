@@ -84,28 +84,41 @@ function setCalendarVisible(id, visible) {
  * occurrences, so each one has its own id. Editing that id changes just that
  * occurrence, exactly like choosing "This event" in Google Calendar.
  */
-async function listEvents(start, end) {
+const MAX_PAGES = 10; // 250 events a page: up to 2,500 per calendar per request
+
+/** onFailed(calendarName) is called for each calendar that couldn't be read (optional). */
+async function listEvents(start, end, onFailed = () => {}) {
   const calendars = (await listCalendars()).filter((c) => c.visible);
 
-  // Fetch every calendar in parallel. One failing calendar shouldn't blank the
-  // whole list, so failures are logged and skipped.
+  // Fetch every calendar in parallel, page by page. One failing calendar shouldn't blank
+  // the whole list, so failures are skipped and reported (a dead sign-in still stops everything).
   const perCalendar = await Promise.all(
     calendars.map(async (cal) => {
       try {
-        const { data } = await api().events.list({
-          calendarId: cal.id,
-          timeMin: start.toISOString(),
-          timeMax: end.toISOString(),
-          singleEvents: true,
-          orderBy: 'startTime',
-          maxResults: 250,
-        });
-        return (data.items || [])
+        const items = [];
+        let pageToken;
+        for (let page = 0; page < MAX_PAGES; page++) {
+          const { data } = await api().events.list({
+            calendarId: cal.id,
+            timeMin: start.toISOString(),
+            timeMax: end.toISOString(),
+            singleEvents: true,
+            orderBy: 'startTime',
+            maxResults: 250,
+            pageToken,
+          });
+          items.push(...(data.items || []));
+          pageToken = data.nextPageToken;
+          if (!pageToken) break;
+        }
+        return items
           .filter((e) => e.status !== 'cancelled')
           .filter((e) => !declinedByMe(e))
           .map((e) => normalize(e, cal));
       } catch (err) {
+        if (err.code === 'NOT_SIGNED_IN' || /invalid_grant|invalid_rapt/.test(`${err.response?.data?.error || ''} ${err.message}`)) throw err;
         console.warn(`Skipping calendar ${cal.name}:`, err.message);
+        onFailed(cal.name);
         return [];
       }
     }),
@@ -131,6 +144,8 @@ function normalize(e, cal) {
     calendarName: cal.name,
     canEdit: cal.canEdit,
     title: e.summary || '(No title)',
+    recurring: !!e.recurringEventId, // one occurrence of a repeating event
+    untitled: !e.summary, // the editor shows an empty title instead of saving "(No title)"
     location: e.location || '',
     description: e.description || '',
     allDay,
@@ -249,7 +264,14 @@ async function updateEvent({ calendarId, eventId, title, start, end, allDay, loc
   if (title !== undefined) body.summary = title;
   if (location !== undefined) body.location = location;
   if (description !== undefined) body.description = description;
-  if (start !== undefined) Object.assign(body, toGoogleTimes({ start, end, allDay }));
+  if (start !== undefined) {
+    // PATCH merges into what Google has, so switching between timed and all-day must clear
+    // the other kind of time explicitly (else Google keeps both and rejects the event).
+    const t = toGoogleTimes({ start, end, allDay });
+    const clear = allDay ? { dateTime: null, timeZone: null } : { date: null };
+    body.start = { ...t.start, ...clear };
+    body.end = { ...t.end, ...clear };
+  }
   const params = applyExtras(body, extras);
   const { data } = await api().events.patch({ calendarId, eventId, requestBody: body, ...params });
   return summarize(data);
@@ -279,4 +301,7 @@ async function getEvent({ calendarId, eventId }) {
   return data;
 }
 
-module.exports = { listCalendars, setCalendarVisible, listEvents, createEvent, updateEvent, deleteEvent, getEvent };
+/** Forget cached lists (another Google account may sign in next). */
+function clearCache() { calendarCache = { at: 0, list: null }; }
+
+module.exports = { clearCache, listCalendars, setCalendarVisible, listEvents, createEvent, updateEvent, deleteEvent, getEvent };

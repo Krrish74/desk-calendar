@@ -39,7 +39,12 @@ export async function desktopEmail(env, token, url) {
   const hit = verified.get(key);
   if (hit && hit.expires > Date.now()) return hit.email;
 
-  const info = await fetch(`https://oauth2.googleapis.com/tokeninfo?access_token=${encodeURIComponent(token)}`).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+  // Sent in the body (not the URL), so the token can't end up in request logs.
+  const info = await fetch('https://oauth2.googleapis.com/tokeninfo', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ access_token: token }),
+  }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
   if (!info || !info.aud) throw notSignedIn('Google didn\'t accept the desktop app\'s sign-in. Sign in again in the desktop app.');
   const project = String(env.GOOGLE_CLIENT_ID || '').split('-')[0];
   if (!project || !String(info.aud).startsWith(`${project}-`)) {

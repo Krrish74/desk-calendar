@@ -168,6 +168,9 @@ project):
 | `ALLOWED_EMAILS` | **You type it**: your Gmail address (the only account allowed in) |
 
 What you paste isn't shown on screen; that's normal. Secrets apply right away.
+
+Optional: the assistant stops for the rest of the month once it has cost **US$5** (a guard against runaway use).
+To change the limit: `npx wrangler secret put ASSISTANT_MONTHLY_LIMIT_USD` and type a number, e.g. `10`.
 To change one later: `npx wrangler secret put NAME` (for example
 `npx wrangler secret put ANTHROPIC_API_KEY`).
 

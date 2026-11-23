@@ -22,6 +22,7 @@ const { app, BrowserWindow, Notification, nativeTheme, screen, shell } = require
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const { fileURLToPath } = require('url');
 const prefs = require('./prefs');
 
 const DEFAULT_SIZE = { width: 1200, height: 800 };
@@ -35,6 +36,24 @@ const IS_MAC = process.platform === 'darwin';
 const SUPPORTS_MICA = process.platform === 'win32' && Number(os.release().split('.')[2]) >= 22621;
 // See-through page background: Mica on Windows 11, vibrancy on every Mac.
 const TRANSLUCENT = SUPPORTS_MICA || IS_MAC;
+
+// The app's own page. The window never shows anything else, and main.js only answers
+// requests that come from it.
+const PAGE = path.join(__dirname, '..', 'renderer', 'index.html');
+/** Compare file paths the way the OS does (Windows and macOS ignore letter case). */
+const samePath = (a, b) => (process.platform === 'linux' ? a === b : a.toLowerCase() === b.toLowerCase());
+/** True for the app's page (with or without ?query / #hash), however the URL is spelled. */
+function isAppPage(url) {
+  if (typeof url !== 'string' || !url.startsWith('file:')) return false;
+  try {
+    return samePath(path.normalize(fileURLToPath(url.split(/[?#]/)[0])), path.normalize(PAGE));
+  } catch {
+    return false;
+  }
+}
+// Browser permissions the page may use: copying a Meet link. Everything else (camera,
+// microphone, location, notifications from the page…) is refused.
+const ALLOWED_PERMISSIONS = new Set(['clipboard-sanitized-write']);
 
 let win = null;
 let quitting = false; // true once the user really wants to quit (tray → Quit)
@@ -63,7 +82,7 @@ function saveState() {
   if (!win || win.isMinimized()) return;
   // getNormalBounds = the size it returns to when un-maximized.
   const state = { v: STATE_VERSION, ...win.getNormalBounds(), maximized: win.isMaximized() };
-  fs.writeFileSync(stateFile(), JSON.stringify(state));
+  try { prefs.writeFileAtomic(stateFile(), JSON.stringify(state)); } catch (err) { console.error('[window state]', err.message); }
 }
 
 // ---------------------------------------------------------------------------
@@ -123,7 +142,7 @@ function create({ startHidden = false } = {}) {
   }
 
   // ?mica=1 tells the page to make its background transparent (see styles.css: html.mica).
-  win.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'), {
+  win.loadFile(PAGE, {
     query: { mica: TRANSLUCENT ? '1' : '0' },
   });
 
@@ -166,6 +185,14 @@ function create({ startHidden = false } = {}) {
     if (url.startsWith('https://')) shell.openExternal(url);
     return { action: 'deny' };
   });
+  // The window itself never leaves the app's page (a link or file dropped on it, a stray
+  // redirect): another page would otherwise get the app's backend functions.
+  const stay = (e, url) => { if (!isAppPage(url)) e.preventDefault(); };
+  win.webContents.on('will-navigate', stay);
+  win.webContents.on('will-redirect', stay);
+  const ses = win.webContents.session;
+  ses.setPermissionRequestHandler((_wc, permission, done) => done(ALLOWED_PERMISSIONS.has(permission)));
+  ses.setPermissionCheckHandler((_wc, permission) => ALLOWED_PERMISSIONS.has(permission));
 
   return win;
 }
@@ -211,6 +238,7 @@ module.exports = {
   create, show, toggle, command,
   get: () => win,
   setQuitting: () => { quitting = true; },
+  isAppPage,
   SUPPORTS_MICA,
   IS_MAC,
 };

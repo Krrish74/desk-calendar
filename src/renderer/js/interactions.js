@@ -45,10 +45,14 @@ function trackPointer(down, { onDrag, onEnd }) {
     }
     onDrag(m);
   };
+  let ended = false;
   const up = (u) => {
+    if (ended) return;
+    ended = true;
     target.removeEventListener('pointermove', move);
     target.removeEventListener('pointerup', up);
     target.removeEventListener('pointercancel', up);
+    target.removeEventListener('lostpointercapture', up);
     document.body.classList.remove('dragging');
     if (moved) {
       // Swallow the click the browser may fire right after this drop, but only that one:
@@ -57,10 +61,12 @@ function trackPointer(down, { onDrag, onEnd }) {
       setTimeout(() => { swallowClick = false; }, 0);
     }
     onEnd(moved, u);
+    if (deferredRender) renderView(); // a refresh arrived during the drag
   };
   target.addEventListener('pointermove', move);
   target.addEventListener('pointerup', up);
   target.addEventListener('pointercancel', up);
+  target.addEventListener('lostpointercapture', up); // e.g. the grid was redrawn under the pointer
 }
 
 // ============================================================================
@@ -83,6 +89,8 @@ function attachTimeGrid(root, dayList) {
     const block = down.target.closest('.tblock');
     if (block) return dragBlock(down, block);
     const col = down.target.closest('.tg-col');
+    // A popover is open: this click just closes it (like Google), it doesn't start a new event.
+    if (col && openPop) { closePopover(); return; }
     if (col) return dragCreate(down, cols.indexOf(col));
   });
 
@@ -139,7 +147,7 @@ function attachTimeGrid(root, dayList) {
       ghost.style.width = 'calc(100% - 8px)';
       ghost.querySelector('.tb-time').textContent = `${fmtTime(at(a))} – ${fmtTime(at(b))}`;
     };
-    const at = (min) => new Date(+day + min * 60000);
+    const at = (min) => atWallMinute(day, min);
 
     trackPointer(down, {
       onDrag(m) {
@@ -173,6 +181,7 @@ function attachDayGrid(container, dayAt, highlight) {
     if (down.button !== 0) return;
     if (down.target.closest('.mg-num, .mg-more, .tg-dayhead')) return;
     const item = down.target.closest('.chip, .mg-line');
+    if (!item && openPop) { closePopover(); return; } // just close the open popover
     const startDay = dayAt(down.clientX, down.clientY);
     if (!startDay) return;
 
@@ -306,6 +315,8 @@ function openDetails(ev, anchorEl) {
   const desc = htmlToText(ev.description);
   if (desc) detailRow('text_description', desc, 'dt-desc');
   detailRow('calendar_ltr', ev.calendarName + (ev.canEdit ? '' : ' (view only)'));
+  // Changes made here apply to this one occurrence (the whole series is edited in Google Calendar).
+  if (ev.recurring && ev.canEdit) detailRow('arrow_sync', 'Repeating event: changes here affect only this occurrence.', 'muted');
 
   openPopover(pop, anchorEl);
 }
@@ -401,7 +412,7 @@ function openQuickCreate({ start, end, allDay }, anchorEl, onClose) {
 async function deleteWithUndo(ev) {
   let token;
   try {
-    token = unwrap(await desk.deleteLater({ calendarId: ev.calendarId, eventId: ev.id }));
+    token = unwrap(await desk.deleteLater({ calendarId: ev.calendarId, eventId: ev.id, title: ev.title }));
   } catch (err) { status(err.message, true); return; }
 
   const same = (e) => e.id === ev.id && e.calendarId === ev.calendarId;
@@ -411,8 +422,10 @@ async function deleteWithUndo(ev) {
   tickCountdown();
 
   showToast(`Event deleted`, 'Undo', async () => {
-    const undone = unwrap(await desk.undoDelete(token));
-    status(undone ? `Restored “${ev.title}”` : 'Too late to undo: it was already deleted.', !undone);
+    try {
+      const undone = unwrap(await desk.undoDelete(token));
+      status(undone ? `Restored “${ev.title}”` : 'Too late to undo: it was already deleted.', !undone);
+    } catch (err) { status(err.message, true); }
     loadEvents();
   });
 }

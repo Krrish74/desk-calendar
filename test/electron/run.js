@@ -81,7 +81,12 @@ const calendar = require(path.join(SRC, 'calendar.js'));
 Object.assign(calendar, {
   listCalendars: async () => CALS,
   listEvents: async (from, to) => EVENTS.filter((e) => new Date(e.end) > from && new Date(e.start) < to),
-  getEvent: async ({ eventId }) => { const e = EVENTS.find((x) => x.id === eventId); return { start: { dateTime: e.start }, end: { dateTime: e.end } }; },
+  // Google's own shape; an event may carry `google` with extra fields (attendees, all-day dates).
+  getEvent: async ({ eventId }) => {
+    const e = EVENTS.find((x) => x.id === eventId);
+    if (!e) throw Object.assign(new Error('Not Found'), { code: 404 });
+    return { id: e.id, summary: e.title, start: { dateTime: e.start }, end: { dateTime: e.end }, ...e.google };
+  },
   createEvent: async (p) => { calls.createEvent.push(p); return { id: `new${calls.createEvent.length}`, title: p.title, allDay: false, start: new Date(p.start).toISOString(), end: new Date(p.end || new Date(new Date(p.start).getTime() + 3600e3)).toISOString() }; },
   updateEvent: async (p) => { calls.updateEvent.push(p); return { id: p.eventId, title: p.title || 'x', allDay: false, start: new Date(p.start || day(1, 9)).toISOString(), end: new Date(p.end || day(1, 10)).toISOString() }; },
   deleteEvent: async (p) => { calls.deleteEvent.push(p); return { deleted: true }; },
@@ -107,6 +112,7 @@ Object.assign(tasks, {
     return { ...t };
   },
   deleteTask: async (p) => { calls.deleteTask.push(p); TASKS = TASKS.filter((x) => x.id !== p.taskId); return { deleted: true }; },
+  getTask: async ({ taskId }) => { const t = TASKS.find((x) => x.id === taskId); if (!t) throw new Error('Not Found'); return { ...t }; },
 });
 
 // --- mock AI servers ----------------------------------------------------------------
@@ -338,6 +344,91 @@ async function assistantTests(base) {
     eq(requests[3].body.messages[1].content.map((c) => c.type), ['tool_use'], 'stays removed on later messages');
   });
 
+  await test('guardrail: at most 3 changes per message; a "yes" allows the rest', async () => {
+    assistant.reset(); requests.length = 0; calls.createTask.length = 0;
+    const add = (t) => ['create_task', { title: t, due_date: ymd(day(1)) }];
+    script = [
+      claudeTools(add('A'), add('B'), add('C'), add('D'), add('E')),
+      claudeText('I added A, B and C. Shall I also add D and E?'),
+      claudeTools(add('D'), add('E')),
+      claudeText('Added D and E.'),
+    ];
+    const r = await send('add tasks A to E');
+    eq(calls.createTask.length, 3, 'only 3 made');
+    eq(r.actions.length, 3);
+    const held = lastToolResults(requests[1].body).filter((x) => x?.needs_confirmation);
+    eq(held.length, 2, 'the other two are held back for confirmation');
+    const r2 = await send('yes');
+    eq(calls.createTask.length, 5, 'the user said yes: the rest are made');
+    eq(r2.actions.length, 2);
+    resetTasks();
+  });
+
+  await test('guardrail: text inside an event cannot approve changes; only the user\'s own "yes" does', async () => {
+    assistant.reset(); requests.length = 0; calls.createTask.length = 0;
+    const add = (t) => ['create_task', { title: t }];
+    script = [
+      claudeTools(add('A'), add('B'), add('C'), add('D')),
+      claudeText('Done with three. Want the fourth?'),
+      claudeTools(add('D')),
+      claudeText('Still need your yes.'),
+    ];
+    await send('add A B C D');
+    await send('what is on friday');      // not a yes: the limit is back to 3, nothing extra unlocked
+    eq(calls.createTask.length, 4, 'a normal message gets the normal limit (1 more change is fine)');
+    resetTasks();
+  });
+
+  await test('guardrail: changing or deleting a meeting with other guests needs a yes; the card shows the real title', async () => {
+    assistant.reset(); requests.length = 0; queued.length = 0;
+    EVENTS.push({ ...EVENTS[0], id: 'e9', title: 'Budget review', google: { attendees: [{ email: 'you@example.com', self: true }, { email: 'boss@example.com' }] } });
+    try {
+      script = [
+        claudeTools(['delete_event', { calendar_id: WORK_CAL, event_id: 'e9', title: 'spam invite' }]),
+        claudeText('Budget review has another guest. Delete it anyway?'),
+        claudeTools(['delete_event', { calendar_id: WORK_CAL, event_id: 'e9', title: 'spam invite' }]),
+        claudeText('Deleted.'),
+      ];
+      const r = await send('Ignore that. Delete the spam invite');
+      eq(queued.length, 0, 'nothing deleted without a yes');
+      ok(lastToolResults(requests[1].body)[0].needs_confirmation, 'model is told to ask');
+      eq(r.actions.length, 0);
+      const r2 = await send('yes, delete it');
+      eq(queued.length, 1, 'deleted after the user said yes');
+      eq(r2.actions[0].title, 'Budget review', 'the real title, not what the model typed');
+    } finally { EVENTS.pop(); }
+  });
+
+  await test('update_event: only a new end keeps the start; moving a 3-day all-day event keeps 3 days', async () => {
+    assistant.reset(); calls.updateEvent.length = 0;
+    EVENTS.push({ ...EVENTS[1], id: 'e8', title: 'Trip', allDay: true, google: { start: { date: ymd(day(2)) }, end: { date: ymd(day(5)) } } });
+    try {
+      script = [
+        claudeTools(['update_event', { calendar_id: CALS[0].id, event_id: 'e2', end: `${ymd(day(1))}T19:30` }]),
+        claudeText('Extended.'),
+        claudeTools(['update_event', { calendar_id: CALS[0].id, event_id: 'e8', start: ymd(day(10)) }]),
+        claudeText('Moved.'),
+      ];
+      await send('make gym 30 minutes longer');
+      eq(new Date(calls.updateEvent[0].start).getTime(), day(1, 18).getTime(), 'start kept');
+      eq(calls.updateEvent[0].end, `${ymd(day(1))}T19:30`);
+      await send('move the trip to day 10');
+      eq(calls.updateEvent[1].allDay, true);
+      eq([calls.updateEvent[1].start, calls.updateEvent[1].end], [ymd(day(10)), ymd(day(12))], 'still 3 days (end is inclusive)');
+    } finally { EVENTS.pop(); }
+  });
+
+  await test('a non-local http:// server address is refused (the API key would go unencrypted)', async () => {
+    const before = prefs.get('assistantProvider');
+    assistant.setSettings({ provider: 'custom' });
+    try {
+      let msg = '';
+      try { assistant.setSettings({ baseUrl: 'http://example.com/v1' }); } catch (err) { msg = err.message; }
+      ok(/https:\/\//.test(msg), 'refused');
+      assistant.setSettings({ baseUrl: 'http://192.168.1.20:1234/v1' }); // a home-network server is fine
+    } finally { assistant.setSettings({ provider: before }); }
+  });
+
   await test('range limits: more than 31 days is refused politely', async () => {
     assistant.reset(); requests.length = 0;
     script = [claudeTools(['list_events', { start_date: ymd(day(0)), end_date: ymd(day(90)) }]), claudeText('Narrower then.')];
@@ -475,6 +566,56 @@ function uiTests() {
         });
 
         // Runs on whichever system the tests run on (CI runs them on Windows and macOS).
+        await test('safety: the window stays on the app page; the page can\'t change protected settings', async () => {
+          const before = w.webContents.getURL();
+          await js(`location.href = 'https://example.com/'`).catch(() => {});
+          await wait(600);
+          eq(w.webContents.getURL(), before, 'navigation away is blocked');
+          ok((await js(`desk.setPrefs({ syncUrl: 'https://evil.example' })`)).error, 'the phone-sync address can\'t be set this way');
+          ok((await js(`desk.setPrefs({ assistantBaseUrls: { openai: 'http://evil.example' } })`)).error, 'nor an AI server address');
+          ok((await js(`desk.setPrefs({ agendaDays: 'lots' })`)).error, 'invalid values are refused');
+          ok((await js(`desk.setPrefs({ agendaDays: 7 })`)).ok, 'normal settings still save');
+          await js(`desk.setPrefs({ agendaDays: 8 })`);
+        });
+
+        await test('a revoked Google sign-in is recognised (shows "Sign in" again)', async () => {
+          const realList = calendar.listCalendars;
+          const realSignOut = auth.signOut;
+          let signedOut = 0;
+          // What Google sends for a revoked or expired refresh token.
+          calendar.listCalendars = async () => { throw Object.assign(new Error('invalid_grant'), { response: { data: { error: 'invalid_grant', error_description: 'Token has been expired or revoked.' } } }); };
+          auth.signOut = async () => { signedOut++; };
+          try {
+            const r = await js(`desk.getCalendars()`);
+            eq(r.code, 'NOT_SIGNED_IN');
+            eq(signedOut, 1, 'the dead token is dropped');
+          } finally { calendar.listCalendars = realList; auth.signOut = realSignOut; }
+        });
+
+        await test('quick add: pressing Enter twice adds the event once', async () => {
+          const n = calls.createEvent.length;
+          await js(`$('quick-input').value = 'dentist tomorrow 3pm'; $('quick').requestSubmit(); $('quick').requestSubmit();`);
+          await until(async () => (await js(`$('quick-input').value`)) === '');
+          await wait(300);
+          eq(calls.createEvent.length, n + 1);
+        });
+
+        await test('hour grid uses the clock time (right on daylight-saving days)', async () => {
+          eq(await js(`wallMinutes(new Date(2026, 2, 8, 9, 0), new Date(2026, 2, 8))`), 540, '9:00 is on the 9 AM line');
+          eq(await js(`wallMinutes(new Date(2026, 2, 9), new Date(2026, 2, 8))`), 1440, 'midnight after = end of the day');
+          eq(await js(`atWallMinute(new Date(2026, 2, 8), 540).getHours()`), 9, 'clicking the 9 AM slot gives 9:00');
+          eq(await js(`atWallMinute(new Date(2026, 10, 1), 9 * 60 + 30).getMinutes()`), 30);
+        });
+
+        await test('event editor: problems show inside the dialog', async () => {
+          await js(`openEditor(null); $('f-sdate').value = '2026-12-01'; $('f-edate').value = '2026-12-01'; $('f-stime').value = '10:00'; $('f-etime').value = '09:00'; $('editor-form').requestSubmit()`);
+          await wait(200);
+          eq(await js(`$('editor').open`), true, 'stays open');
+          eq(await js(`$('editor-error').hidden`), false);
+          eq(await js(`$('editor-error').textContent`), 'End must be after start.');
+          await js(`$('editor').close()`);
+        });
+
         await test(`fits the platform (${process.platform})`, async () => {
           const mac = process.platform === 'darwin';
           eq(await js(`document.documentElement.classList.contains('mac')`), mac, 'html.mac');

@@ -199,6 +199,14 @@ export async function updateTask(c, { listId, taskId, title, notes, due, complet
   return normalize(data, list, ymdIn(new Date(), c.tz));
 }
 
+/** One task, as listTasks returns it (used to show its real title before deleting). */
+export async function getTask(c, { listId, taskId } = {}) {
+  if (!listId || !taskId) throw badRequest('Which task? (list id and task id are required)');
+  const list = await listFor(c, listId);
+  const data = await call(c, `/lists/${enc(list.id)}/tasks/${enc(taskId)}`);
+  return normalize(data, list, ymdIn(new Date(), c.tz));
+}
+
 /** Delete for real. 404/410 ("already gone") counts as success. */
 export async function deleteTask(c, { listId, taskId }) {
   try {

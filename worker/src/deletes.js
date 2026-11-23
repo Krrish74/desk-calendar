@@ -27,6 +27,8 @@ import { getPrefs } from './prefs.js';
 import { safeTimeZone } from './tz.js';
 
 export const UNDO_MS = 6000;
+// Assistant deletes: a longer window, since you first have to read the reply to notice one.
+export const ASSISTANT_UNDO_MS = 20000;
 const ABANDON_MS = 10 * 60 * 1000; // assistant-queued deletes whose reply never went out
 
 /**
@@ -45,12 +47,12 @@ export async function queueDelete(c, item, { startNow = true } = {}) {
 }
 
 /** Start the countdown for deletes the assistant queued (one D1 call for all of them). */
-export async function startDeleteTimers(c, tokens) {
+export async function startDeleteTimers(c, tokens, ms = ASSISTANT_UNDO_MS) {
   if (!tokens.length) return;
-  const due = Date.now() + UNDO_MS;
+  const due = Date.now() + ms;
   await c.env.DB.batch(tokens.map((t) =>
     c.env.DB.prepare('UPDATE pending_deletes SET due_at = ? WHERE token = ? AND email = ? AND due_at IS NULL').bind(due, t, c.email)));
-  for (const t of tokens) c.waitUntil(runLater(c.env, t));
+  for (const t of tokens) c.waitUntil(runLater(c.env, t, ms));
 }
 
 /** Undo. Returns false if it's too late (already deleted). */
@@ -80,8 +82,8 @@ export async function pendingTaskKeys(c) {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-async function runLater(env, token) {
-  await sleep(UNDO_MS + 300);
+async function runLater(env, token, ms = UNDO_MS) {
+  await sleep(ms + 300);
   await runDue(env, token);
 }
 

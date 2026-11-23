@@ -66,4 +66,5 @@ contextBridge.exposeInMainWorld('desk', {
   onPrefsChanged: (fn) => ipcRenderer.on('prefs:changed', (_e, keys) => fn(keys)), // changed on the phone
   onCommand: (fn) => ipcRenderer.on('app:command', (_e, name, payload) => fn(name, payload)), // tray menu, notifications
   onFullscreen: (fn) => ipcRenderer.on('app:fullscreen', (_e, on) => fn(on)), // Mac full screen
+  onDeleteFailed: (fn) => ipcRenderer.on('delete:failed', (_e, info) => fn(info)), // Google refused a delete
 });

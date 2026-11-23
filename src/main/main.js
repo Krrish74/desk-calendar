@@ -21,6 +21,7 @@ const windowManager = require('./windowManager');
 const background = require('./background');
 const notifier = require('./notifier');
 const { createSync } = require('./sync');
+const { checkSettingsPage } = require('./prefcheck');
 const path = require('path');
 
 // The window lives in windowManager.js; tray, hotkey and start-with-Windows in background.js.
@@ -31,14 +32,20 @@ let hotkeyStatus = { ok: true }; // shown in Settings if the hotkey couldn't be 
 if (!app.requestSingleInstanceLock()) app.exit(0);
 app.on('second-instance', () => windowManager.show());
 
-// Any real quit (tray → Quit, Windows shutdown/sign-out) must not be turned into "hide".
-// Deletes still inside their Undo window are finished first.
+// Any real quit (tray → Quit, Cmd+Q) must not be turned into "hide". Deletes still inside
+// their Undo window, and deletes already on their way to Google, are finished first (for at
+// most a few seconds, so a hung request can't stop the app from quitting).
+const QUIT_WAIT_MS = 5000;
+let quitReady = false;
 app.on('before-quit', (e) => {
   windowManager.setQuitting();
-  if (pendingDeletes.size) {
-    e.preventDefault();
-    flushDeletes().finally(() => app.quit());
-  }
+  if (quitReady) return;
+  // An assistant delete whose reply never arrived has no timer yet: it's dropped, the item stays.
+  for (const [token, p] of pendingDeletes) if (!p.timer) cancelDelete(token);
+  if (!pendingDeletes.size && !inFlightDeletes.size) return;
+  e.preventDefault();
+  const timeout = new Promise((r) => setTimeout(r, QUIT_WAIT_MS));
+  Promise.race([flushDeletes(), timeout]).finally(() => { quitReady = true; app.quit(); });
 });
 
 // Windows needs this ID to show our notifications with the right name and icon.
@@ -62,6 +69,9 @@ app.whenReady().then(async () => {
   // whenever the window comes forward.
   phoneSync.start();
   windowManager.get()?.on('focus', () => phoneSync.onFocus());
+  // Windows shutdown / sign-out doesn't send before-quit: finish pending deletes now.
+  windowManager.get()?.on('session-end', () => { flushDeletes(); });
+  notifier.setHiddenCheck((calendarId, eventId) => pendingDeleteKeys().has(`${calendarId}|${eventId}`));
 });
 
 // Closing the window only hides it, so the app keeps running until Quit in the tray.
@@ -79,21 +89,31 @@ app.on('activate', () => windowManager.show());
  * 7-day Testing-mode expiry), we drop it so the UI shows "Sign in" again.
  */
 function handle(channel, fn) {
-  ipcMain.handle(channel, async (_event, ...args) => {
+  ipcMain.handle(channel, async (event, ...args) => {
+    // Only the app's own page may call the backend (see windowManager.js: the window can't
+    // be navigated anywhere else, and this is the second lock on that door).
+    if (!windowManager.isAppPage(event.senderFrame?.url)) return { error: 'Not allowed.' };
     try {
       return { ok: true, data: await fn(...args) };
     } catch (err) {
       const msg = err?.response?.data?.error_description || err?.message || String(err);
-      if (err.code === 'NOT_SIGNED_IN' || /invalid_grant|invalid_rapt/.test(msg)) {
-        await auth.signOut();
+      // Google's code for a dead sign-in ("invalid_grant") can be in error, error_description
+      // or the message, depending on the library version: check all of them.
+      const googleCode = `${err?.response?.data?.error || ''} ${err?.message || ''} ${msg}`;
+      if (err?.code === 'NOT_SIGNED_IN' || /invalid_grant|invalid_rapt/.test(googleCode)) {
+        await auth.signOut().catch(() => {});
+        clearCaches();
         return { error: 'Your Google sign-in expired. Please sign in again.', code: 'NOT_SIGNED_IN' };
       }
       console.error(`[${channel}]`, msg);
       // Tasks permission / API problems carry a code so the page can offer the fix.
-      return /^TASKS_/.test(err.code) ? { error: msg, code: err.code } : { error: msg };
+      return /^TASKS_/.test(err?.code) ? { error: msg, code: err.code } : { error: msg };
     }
   });
 }
+
+/** Calendar and task-list caches belong to one Google account. */
+function clearCaches() { calendar.clearCache(); tasks.clearCache(); }
 
 // Tell the page to reload its events (used after the chatbot changes something),
 // and let the notification scheduler re-fetch upcoming events.
@@ -126,8 +146,8 @@ handle('auth:importCredentials', async () => {
   auth.importCredentials(filePaths[0]);
   return true;
 });
-handle('auth:signIn', async () => { const r = await auth.signIn(); phoneSync.syncNow(); return r; });
-handle('auth:signOut', () => auth.signOut());
+handle('auth:signIn', async () => { const r = await auth.signIn(); clearCaches(); phoneSync.syncNow(); return r; });
+handle('auth:signOut', async () => { await auth.signOut(); clearCaches(); });
 // Your Google account's email: the ID of your primary calendar is your address.
 handle('auth:account', async () => (await calendar.listCalendars()).find((c) => c.primary)?.id || '');
 
@@ -151,6 +171,8 @@ handle('cal:delete', (ev) => calendar.deleteEvent(ev));
 // The wait lives here in the backend so refreshes don't resurrect it and quitting
 // the app still finishes the delete (see the before-quit handler at the top).
 const UNDO_MS = 6000;
+// Assistant deletes: longer, since you first have to read the reply to notice one.
+const ASSISTANT_UNDO_MS = 20000;
 // The same queue handles Google Tasks: entries are { kind: 'event', calendarId, eventId }
 // or { kind: 'task', listId, taskId }.
 const pendingDeletes = new Map(); // token → { kind, …ids, timer }
@@ -161,16 +183,27 @@ const pendingDeleteKeys = () =>
 const pendingTaskKeys = () =>
   new Set([...pendingDeletes.values()].filter((p) => p.kind === 'task').map((p) => `${p.listId}|${p.taskId}`));
 
+const inFlightDeletes = new Set(); // deletes sent to Google and not answered yet (quit waits for them)
+
 async function runDelete(token) {
   const p = pendingDeletes.get(token);
   if (!p) return;
   clearTimeout(p.timer);
   pendingDeletes.delete(token);
-  try {
-    await (p.kind === 'task' ? tasks.deleteTask(p) : calendar.deleteEvent(p));
-  } catch (err) {
-    console.error('[delete]', err.message);
-  }
+  const job = (async () => {
+    try {
+      await (p.kind === 'task' ? tasks.deleteTask(p) : calendar.deleteEvent(p));
+    } catch (err) {
+      // Already gone is fine; anything else: the item comes back, so say why.
+      const status = err?.response?.status || err?.code;
+      if (status !== 404 && status !== 410) {
+        console.error('[delete]', err.message);
+        win()?.webContents.send('delete:failed', { title: p.title || '', isTask: p.kind === 'task', error: err.message });
+      }
+    }
+  })();
+  inFlightDeletes.add(job);
+  try { await job; } finally { inFlightDeletes.delete(job); }
   notifyChanged();
 }
 
@@ -180,15 +213,17 @@ async function runDelete(token) {
  */
 function queueDelete(item, startNow = true) {
   const token = nextToken++;
+  if (!item || typeof item !== 'object') throw new Error('Nothing to delete.');
+  const title = typeof item.title === 'string' ? item.title.slice(0, 200) : '';
   pendingDeletes.set(token, item.kind === 'task'
-    ? { kind: 'task', listId: item.listId, taskId: item.taskId, timer: null }
-    : { kind: 'event', calendarId: item.calendarId, eventId: item.eventId, timer: null });
+    ? { kind: 'task', listId: String(item.listId), taskId: String(item.taskId), title, timer: null }
+    : { kind: 'event', calendarId: String(item.calendarId), eventId: String(item.eventId), title, timer: null });
   if (startNow) startDeleteTimer(token);
   return token;
 }
-function startDeleteTimer(token) {
+function startDeleteTimer(token, ms = UNDO_MS) {
   const p = pendingDeletes.get(token);
-  if (p && !p.timer) p.timer = setTimeout(() => runDelete(token), UNDO_MS);
+  if (p && !p.timer) p.timer = setTimeout(() => runDelete(token), ms);
 }
 function cancelDelete(token) {
   const p = pendingDeletes.get(token);
@@ -200,10 +235,13 @@ function cancelDelete(token) {
 
 handle('cal:deleteLater', (ev) => queueDelete(ev));
 handle('cal:undoDelete', (token) => cancelDelete(token));
-// On quit, finish deletes whose Undo window is running. (A delete queued by the assistant
-// whose reply never arrived has no timer yet; it's dropped and the event stays.)
-const flushDeletes = () =>
-  Promise.all([...pendingDeletes.entries()].filter(([, p]) => p.timer).map(([token]) => runDelete(token)));
+// On quit, finish deletes whose Undo window is running, and wait for ones already sent.
+// (A delete queued by the assistant whose reply never arrived has no timer yet; it's
+// dropped and the event stays.)
+const flushDeletes = () => Promise.all([
+  ...[...pendingDeletes.entries()].filter(([, p]) => p.timer).map(([token]) => runDelete(token)),
+  ...inFlightDeletes,
+]);
 
 // --- Google Tasks ---
 // Tasks need the extra "tasks" permission; sign-ins from before it existed get
@@ -223,7 +261,7 @@ handle('tasks:list', async (q = {}) => {
 });
 handle('tasks:create', (t) => tasks.createTask(t));
 handle('tasks:update', (t) => tasks.updateTask(t));
-handle('tasks:deleteLater', ({ listId, taskId }) => queueDelete({ kind: 'task', listId, taskId }));
+handle('tasks:deleteLater', ({ listId, taskId, title } = {}) => queueDelete({ kind: 'task', listId, taskId, title }));
 handle('tasks:parse', (text) => parseTask(text));
 
 /** "call mom friday" → { title: 'call mom', due: '2026-11-27' }. No date → today. */
@@ -275,6 +313,8 @@ async function parseQuick(text) {
 // window (UNDO_MS) starts once the reply is on screen, so you have time to see it.
 handle('chat:send', async (text) => {
   const queued = [];
+  if (typeof text !== 'string' || !text.trim()) throw new Error('Type a message first.');
+  if (text.length > 4000) throw new Error('That message is too long (4,000 characters at most).');
   const queue = (ev) => { const t = queueDelete(ev, false); queued.push(t); return t; };
   let result;
   try {
@@ -284,10 +324,13 @@ handle('chat:send', async (text) => {
     notifyChanged();
     throw err;
   }
+  // Deletes get their Undo countdown only once the reply (with its Undo button) is shown;
+  // anything queued but not reported is cancelled.
+  for (const a of result.actions) if (a.kind === 'deleted' && pendingDeletes.has(a.token)) pendingDeletes.get(a.token).title = a.title || '';
   const reported = new Set(result.actions.filter((a) => a.kind === 'deleted').map((a) => a.token));
-  for (const t of queued) (reported.has(t) ? startDeleteTimer : cancelDelete)(t);
+  for (const t of queued) { if (reported.has(t)) startDeleteTimer(t, ASSISTANT_UNDO_MS); else cancelDelete(t); }
   if (queued.some((t) => !reported.has(t))) notifyChanged();
-  return result;
+  return { ...result, undoMs: ASSISTANT_UNDO_MS };
 });
 handle('chat:reset', () => assistant.reset());
 handle('chat:keyStatus', () => assistant.hasKey());
@@ -311,7 +354,7 @@ handle('notify:test', () => notifier.show({
   end: new Date(Date.now() + (prefs.get('notifyMinutes') + 60) * 60000).toISOString(),
   location: 'This is what reminders will look like', meetLink: '',
 }, prefs.get('notifyMinutes') * 60000));
-handle('open:url', (url) => { if (url.startsWith('https://')) shell.openExternal(url); });
+handle('open:url', (url) => { if (typeof url === 'string' && /^https:\/\//i.test(url)) shell.openExternal(url); });
 
 // --- preferences (Settings) ---
 handle('prefs:get', () => ({
@@ -321,8 +364,13 @@ handle('prefs:get', () => ({
   isPackaged: app.isPackaged, // start-with-Windows only applies to the installed app
 }));
 
-/** Apply changes from Settings. Side effects (hotkey, login item) happen before saving. */
+/**
+ * Apply changes from Settings. Side effects (hotkey, login item) happen before saving.
+ * Only the settings that page edits, with valid values (prefcheck.js): addresses that receive
+ * your Google token or API keys have their own checked channels (sync:setUrl, chat:setSettings).
+ */
 handle('prefs:set', (changes) => {
+  checkSettingsPage(changes);
   if (changes.hotkey !== undefined && changes.hotkey !== prefs.get('hotkey')) {
     const result = background.setHotkey(changes.hotkey);
     if (!result.ok) throw new Error(result.error); // old hotkey stays active and saved

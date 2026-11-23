@@ -24,6 +24,7 @@ let upcoming = [];                   // cached events starting soon
 let lastFetch = 0;
 const notified = new Set();          // "calendarId|eventId|startISO" already shown
 const live = new Set();              // keep shown notifications referenced (else clicks can be lost)
+let isHidden = () => false;          // (calendarId, eventId) → true while a delete's Undo window runs
 
 async function fetchUpcoming() {
   const now = Date.now();
@@ -44,6 +45,7 @@ async function check() {
   const now = Date.now();
   const leadMs = prefs.get('notifyMinutes') * 60 * 1000;
   for (const ev of upcoming) {
+    if (isHidden(ev.calendarId, ev.id)) continue; // being deleted
     const start = new Date(ev.start).getTime();
     const key = `${ev.calendarId}|${ev.id}|${ev.start}`;
     // Due: we're inside the lead window (or within a minute after start, for "at start time").
@@ -70,7 +72,7 @@ function show(ev, msUntil) {
     silent: true,
     actions: ev.meetLink ? [{ type: 'button', text: 'Join' }] : [],
   });
-  n.on('action', () => shell.openExternal(ev.meetLink));
+  n.on('action', () => { if (/^https:\/\//i.test(ev.meetLink || '')) shell.openExternal(ev.meetLink); });
   n.on('click', () => windowManager.command('show-event', { id: ev.id, calendarId: ev.calendarId, start: ev.start }));
   n.on('close', () => live.delete(n));
   live.add(n);
@@ -86,8 +88,15 @@ function invalidate() {
 function start() {
   setInterval(check, CHECK_MS);
   setTimeout(check, 5000); // shortly after launch
-  // Forget old "already notified" keys once a day so the set doesn't grow forever.
-  setInterval(() => notified.clear(), 24 * 60 * 60 * 1000);
+  // Once a day, forget keys of events that have started (so the set doesn't grow forever).
+  // Keys of events still ahead are kept, so they can't notify a second time.
+  setInterval(() => {
+    const now = Date.now();
+    for (const key of notified) if (new Date(key.split('|').pop()).getTime() < now) notified.delete(key);
+  }, 24 * 60 * 60 * 1000);
 }
 
-module.exports = { start, invalidate, show };
+/** main.js tells us which events are waiting to be deleted (they shouldn't remind you). */
+function setHiddenCheck(fn) { isHidden = fn; }
+
+module.exports = { start, invalidate, show, setHiddenCheck };

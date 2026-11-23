@@ -38,7 +38,7 @@ async function loadTasks() {
     state.tasksStatus = problem.code === 'TASKS_SCOPE' ? 'needs-connect'
       : problem.code === 'TASKS_API_DISABLED' ? 'api-disabled' : 'error';
     state.tasksError = problem.error;
-    if (problem.code === 'NOT_SIGNED_IN') unwrap(problem);
+    if (problem.code === 'NOT_SIGNED_IN') { showSetup(problem.error); return; }
   } else {
     state.tasksStatus = 'ok';
     state.todayTasks = todayRes.data;
@@ -154,10 +154,14 @@ async function updateTaskPreview() {
   $('tt-preview').hidden = false;
 }
 
+let taskAddBusy = false;
 $('tt-add').addEventListener('submit', async (e) => {
   e.preventDefault();
   const text = $('tt-input').value.trim();
-  if (!text) return;
+  // Enter twice before Google answers would add the task twice.
+  if (!text || taskAddBusy) return;
+  taskAddBusy = true;
+  $('tt-input').readOnly = true;
   try {
     const p = unwrap(await desk.parseTask(text));
     const created = unwrap(await desk.createTask({ title: p.title, due: p.due }));
@@ -165,7 +169,12 @@ $('tt-add').addEventListener('submit', async (e) => {
     $('tt-preview').hidden = true;
     status(`Added task “${created.title}”${isToday(dueDate(created)) ? '' : ` for ${fmtDay(dueDate(created))}`}`);
     loadTasks();
-  } catch (err) { status(err.message, true); }
+  } catch (err) {
+    status(err.message, true);
+  } finally {
+    taskAddBusy = false;
+    $('tt-input').readOnly = false;
+  }
 });
 
 // --- Changing tasks ----------------------------------------------------------
@@ -190,15 +199,17 @@ async function toggleTask(t, row) {
 async function deleteTaskWithUndo(t) {
   let token;
   try {
-    token = unwrap(await desk.deleteTaskLater({ listId: t.listId, taskId: t.id }));
+    token = unwrap(await desk.deleteTaskLater({ listId: t.listId, taskId: t.id, title: t.title }));
   } catch (err) { status(err.message, true); return; }
   state.todayTasks = state.todayTasks.filter((x) => x.id !== t.id);
   state.tasks = state.tasks.filter((x) => x.id !== t.id);
   renderTodayTasks();
   if (state.view === 'agenda') renderView();
   showToast('Task deleted', 'Undo', async () => {
-    const undone = unwrap(await desk.undoDelete(token));
-    status(undone ? `Restored “${t.title}”` : 'Too late to undo: it was already deleted.', !undone);
+    try {
+      const undone = unwrap(await desk.undoDelete(token));
+      status(undone ? `Restored “${t.title}”` : 'Too late to undo: it was already deleted.', !undone);
+    } catch (err) { status(err.message, true); }
     loadTasks();
   });
 }
@@ -297,18 +308,31 @@ $('tf-nodate').onchange = () => { $('tf-due').disabled = $('tf-nodate').checked;
 $('btn-task-cancel').onclick = () => $('task-editor').close();
 $('btn-task-delete').onclick = () => { $('task-editor').close(); if (editingTask) deleteTaskWithUndo(editingTask); };
 
+let taskEditorSession = 0;
+$('task-editor').addEventListener('close', () => { taskEditorSession++; });
 $('task-editor-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   const title = $('tf-title').value.trim();
-  if (!title) return;
+  if (!title || $('btn-task-save').disabled) return; // disabled while saving: no duplicates
   const fields = { title, notes: $('tf-notes').value, due: $('tf-nodate').checked ? null : $('tf-due').value || null };
+  // This save belongs to the task open now, even if the dialog changes before Google answers.
+  const target = editingTask;
+  const session = taskEditorSession;
+  const errorBox = $('task-editor-error');
+  errorBox.hidden = true;
+  $('btn-task-save').disabled = true;
   try {
-    if (editingTask) unwrap(await desk.updateTask({ listId: editingTask.listId, taskId: editingTask.id, ...fields }));
+    if (target) unwrap(await desk.updateTask({ listId: target.listId, taskId: target.id, ...fields }));
     else unwrap(await desk.createTask({ ...fields, listId: $('tf-list').value || undefined }));
-    $('task-editor').close();
-    status(editingTask ? 'Task saved' : `Added task “${title}”`);
+    if (session === taskEditorSession) $('task-editor').close();
+    status(target ? 'Task saved' : `Added task “${title}”`);
     loadTasks();
-  } catch (err) { status(err.message, true); }
+  } catch (err) {
+    if (session === taskEditorSession && $('task-editor').open) { errorBox.textContent = err.message; errorBox.hidden = false; }
+    else status(err.message, true);
+  } finally {
+    $('btn-task-save').disabled = false;
+  }
 });
 
 // --- Agenda ----------------------------------------------------------------------

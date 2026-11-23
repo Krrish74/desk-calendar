@@ -16,6 +16,15 @@ if (IS_MAC) {
 // ============================================================================
 
 async function init() {
+  try {
+    await start();
+  } catch (err) {
+    // Something failed while starting: show the sign-in screen with the reason, not a blank window.
+    showSetup(err.message);
+  }
+}
+
+async function start() {
   setPinIcon(unwrap(await desk.isPinned()));
   const { prefs } = unwrap(await desk.getPrefs());
   state.prefs = prefs;
@@ -57,10 +66,15 @@ $('btn-load-creds').onclick = async () => {
 
 $('btn-signin').onclick = async () => {
   $('setup-msg').textContent = 'Waiting for you to finish in the browser…';
+  $('btn-signin').disabled = true; // one sign-in at a time
   try {
     unwrap(await desk.signIn());
     showApp();
-  } catch (e) { $('setup-msg').textContent = 'Sign-in failed: ' + e.message; }
+  } catch (e) {
+    $('setup-msg').textContent = 'Sign-in failed: ' + e.message;
+  } finally {
+    $('btn-signin').disabled = false;
+  }
 };
 
 const signedIn = () => !$('app').hidden;
@@ -68,14 +82,27 @@ const signedIn = () => !$('app').hidden;
 // Settings changed on the phone (shared through the phone app, see src/main/sync.js):
 // pick them up and redraw. Settings → Account → Phone app links the two.
 desk.onPrefsChanged(async () => {
-  const { prefs } = unwrap(await desk.getPrefs());
-  state.prefs = prefs;
-  applyPrefs();
-  if (!signedIn()) return;
-  loadCalendars();
-  refreshScreen();
-  if (!$('settings-page').hidden) fillSettings();
+  try {
+    const { prefs } = unwrap(await desk.getPrefs());
+    state.prefs = prefs;
+    applyPrefs();
+    if (!signedIn()) return;
+    loadCalendars();
+    refreshScreen();
+    if (!$('settings-page').hidden) fillSettings();
+  } catch (err) { status(err.message, true); }
 });
+
+// Google refused a delete after its Undo window (e.g. no permission): the item comes back.
+desk.onDeleteFailed(({ title, isTask, error }) => {
+  status(`Couldn't delete ${isTask ? 'task' : 'event'}${title ? ` “${title}”` : ''}: ${error}`, true);
+  loadEvents();
+});
+
+// Dropping a file or link on the window must not open it in place of the app.
+for (const type of ['dragover', 'drop']) {
+  document.addEventListener(type, (e) => { if (!e.target.closest?.('input, textarea')) e.preventDefault(); });
+}
 
 /** Apply preferences that change how things are drawn (called after Settings changes). */
 function applyPrefs() {
@@ -100,7 +127,8 @@ $('btn-pin').onclick = async () => setPinIcon(unwrap(await desk.togglePin()));
 desk.onCommand((name, payload) => {
   if (!signedIn()) return; // not signed in yet: just showing the window is enough
   if (name === 'refresh') { loadCalendars(); loadEvents(); }
-  if (name === 'new-event') openEditor(null);
+  // Tray "New event": don't throw away an editor that's already open.
+  if (name === 'new-event' && !$('editor').open) openEditor(null);
   if (name === 'settings') openSettings();
   if (name === 'show-event') {
     // Clicked a notification: go to that event's day and flash it.
@@ -130,7 +158,7 @@ document.addEventListener('keydown', (e) => {
 // ============================================================================
 
 setInterval(tickCountdown, 1000);
-setInterval(() => { if (signedIn()) loadEvents(); }, REFRESH_MINUTES * 60 * 1000);
+setInterval(() => { if (signedIn() && !document.body.classList.contains('dragging')) loadEvents(); }, REFRESH_MINUTES * 60 * 1000);
 // Coming back to the window after a while? Refresh if the data is over a minute old.
 window.addEventListener('focus', () => {
   if (signedIn() && Date.now() - state.lastLoaded > 60 * 1000) loadEvents();

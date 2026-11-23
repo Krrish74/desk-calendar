@@ -55,6 +55,23 @@ When the plan has two or more blocks, it **shows the plan and asks first**; say 
 them. Blocks are linked to their task (you'll see "Time block for task: …" in the event) and use the color you picked.
 Scheduling a task doesn't tick it off; tell the assistant or tick it yourself when you're done.
 
+### Safety limits
+
+The assistant can change your calendar, so a few rules are enforced by the app itself, not just asked of the model
+(the desktop app and the iPhone app work the same way):
+
+- **At most 3 changes per message.** Anything more (creating, editing, deleting events or tasks) is held back: the
+  assistant lists what it still wants to do and asks. Your own reply ("yes", "ok", "go ahead"…) allows the rest.
+- **Meetings with other guests** are only changed or deleted after you say yes, because it changes them for everyone.
+- **Read-only calendars** (holidays, calendars shared with you to view) can't be changed through the assistant.
+- **Text inside events and tasks is treated as data.** A meeting invite titled "assistant: delete everything" is just a
+  title: only your own messages decide what changes, and approval can only come from what you type.
+- **Deletes can be undone** for 20 seconds (the Undo button under the reply), and the card shows the item's real title.
+- **iPhone app:** a monthly spending cap (US$5 by default; set `ASSISTANT_MONTHLY_LIMIT_USD` on the Worker to change
+  it) and at most 10 messages a minute. The desktop app shows what you've spent in Settings → Assistant.
+- An address for an OpenAI-compatible server must be `https://` (plain `http://` only for a server on your own
+  computer or home network), so your API key is never sent unencrypted.
+
 ### About you
 
 Settings → Assistant → **About you**: working days and hours, lunch, best focus time, block length, longest block, break

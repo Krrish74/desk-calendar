@@ -160,9 +160,9 @@ function layoutDay(segs) {
 /** One filled event block in the hour grid. */
 function timeBlock(seg, day, now) {
   const { ev } = seg;
-  const minutes = (d) => (d - day) / 60000;
-  const top = (minutes(seg.start) / 60) * HOUR_H;
-  const height = Math.max(MIN_BLOCK_H, ((seg.end - seg.start) / 3600000) * HOUR_H - 2);
+  const startMin = wallMinutes(seg.start, day);
+  const top = (startMin / 60) * HOUR_H;
+  const height = Math.max(MIN_BLOCK_H, ((wallMinutes(seg.end, day) - startMin) / 60) * HOUR_H - 2);
 
   const b = el('div', 'tblock');
   b.dataset.id = ev.id;

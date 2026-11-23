@@ -145,7 +145,7 @@ async function sendChat(text, input) {
   addMsg('user', text);
   const pending = addMsg('bot', 'Thinking…', 'thinking');
   try {
-    const { reply, actions, freshStart } = await api.chat(text);
+    const { reply, actions, freshStart, undoMs } = await api.chat(text);
     if (freshStart) {
       // The Worker started a new conversation (a long pause or a long chat), so earlier
       // messages are no longer remembered. Say so where it happened.
@@ -159,7 +159,7 @@ async function sendChat(text, input) {
       log.append(cards);
       clearCache();
       emit('reload');
-      offerUndo(actions.filter((a) => a.kind === 'deleted' && a.token), cards);
+      offerUndo(actions.filter((a) => a.kind === 'deleted' && a.token), cards, undoMs);
     }
   } catch (err) {
     pending.textContent = err.message;
@@ -171,9 +171,10 @@ async function sendChat(text, input) {
 }
 
 /** Assistant deletes get the same "Undo" toast as deleting by hand. */
-function offerUndo(deleted, cards) {
+function offerUndo(deleted, cards, ms) {
   if (!deleted.length) return;
   const label = deleted.length === 1 ? `Deleted “${deleted[0].title}”` : `Deleted ${deleted.length} items`;
+  // The toast stays up as long as the server's Undo window (a little less, to be safe).
   showToast(label, 'Undo', async () => {
     let restored = 0;
     for (const a of deleted) {
@@ -188,5 +189,5 @@ function offerUndo(deleted, cards) {
       }
     }
     emit('reload');
-  });
+  }, Math.max(6000, (Number(ms) || 6000) - 1000));
 }
