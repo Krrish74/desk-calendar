@@ -96,7 +96,7 @@ as a normal app (next step) and skip PowerShell from then on.
 npm run dist
 ```
 
-This makes `dist\Desk-Calendar-Setup-1.0.0.exe`, the same installer as on the Releases page but from your copy
+This makes `dist\Desk-Calendar-Setup-<version>.exe`, the same installer as on the Releases page but from your copy
 of the code. Double-click it to install: you get a Start menu entry and a
 desktop shortcut. The installer isn't signed, so Windows SmartScreen says **"Windows protected your PC"**:
 click **More info → Run anyway**. That's normal for personal apps.

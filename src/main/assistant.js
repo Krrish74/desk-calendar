@@ -601,7 +601,24 @@ let chatIdentity = null; // provider|model|server this history belongs to
 let userTurns = 0;
 let lastActivity = 0;
 
-function reset() { messages = []; chatIdentity = null; userTurns = 0; resetAliases(); }
+/**
+ * Forget the conversation. Safe while a message is still being answered: that turn keeps
+ * writing to its own (now discarded) history, and the next message starts afresh. The
+ * short calendar/list ids are cleared when that next conversation starts, not here, so
+ * a turn still running can resolve the ids it already handed out.
+ */
+function reset() { messages = []; chatIdentity = null; userTurns = 0; }
+
+// One message at a time. Claude's thinking blocks are signed against the exact history
+// before them, so two turns writing into the same history at once (a second message sent
+// while the first is still being answered) would interleave them and make Claude reject
+// every later request. A message sent meanwhile waits for the previous one to finish.
+let queue = Promise.resolve();
+function send(text, ctx) {
+  const run = queue.then(() => sendNow(text, ctx));
+  queue = run.catch(() => {});
+  return run;
+}
 
 /**
  * Send one user message and run the tool loop until the model gives a final answer.
@@ -613,7 +630,7 @@ function reset() { messages = []; chatIdentity = null; userTurns = 0; resetAlias
  *   usage/cost  tokens used by this message (all its requests) and US$ (null if unknown)
  *   freshStart  true when this message started a new conversation (idle or too long)
  */
-async function send(text, ctx) {
+async function sendNow(text, ctx) {
   const cfg = config();
   if (!cfg.model) throw new Error('Choose a model in Settings → Assistant first.');
   if (cfg.p.kind === 'openai' && !cfg.baseUrl) throw new Error('Enter the server address in Settings → Assistant first.');
@@ -624,26 +641,28 @@ async function send(text, ctx) {
   const identity = `${cfg.id}|${cfg.model}|${cfg.baseUrl}`;
   const stale = messages.length && (Date.now() - lastActivity > IDLE_RESET_MS || userTurns >= MAX_USER_TURNS);
   const freshStart = !!stale;
-  if (chatIdentity !== identity || stale) reset();
+  if (chatIdentity !== identity || stale) { reset(); resetAliases(); }
   chatIdentity = identity;
   lastActivity = Date.now();
 
-  // If anything goes wrong mid-turn, roll history back so the next message
-  // starts from a clean, valid conversation.
-  const checkpoint = messages.length;
+  // This turn works on this history only, even if the chat is reset while it runs.
+  // If anything goes wrong mid-turn, roll it back so the next message starts from a
+  // clean, valid conversation.
+  const history = messages;
+  const checkpoint = history.length;
   const turn = {
-    cfg, ctx, actions: [], checkpoint, usage: { ...ZERO }, requests: 0,
+    cfg, ctx, history, actions: [], checkpoint, usage: { ...ZERO }, requests: 0,
     system: buildSystem(prefs.get('userProfile')),
     userText: `[Now: ${nowLabel()}]\n${text}`,
   };
   try {
     const result = cfg.p.kind === 'anthropic' ? await runClaude(turn) : await runOpenAI(turn);
-    userTurns++;
+    if (history === messages) userTurns++;
     const cost = costOf(turn.usage, cfg);
     recordUsage(turn.usage, cost, turn.requests);
     return { ...result, usage: turn.usage, cost, requests: turn.requests, freshStart };
   } catch (err) {
-    messages.length = checkpoint;
+    history.length = checkpoint;
     if (turn.requests) recordUsage(turn.usage, costOf(turn.usage, cfg), turn.requests); // failed turns still cost something
     throw new Error(friendlyError(err, cfg));
   }
@@ -663,7 +682,7 @@ async function useTool(name, input, { ctx, actions }) {
 // --- Claude (Anthropic Messages API) ---------------------------------------
 
 async function runClaude(turn) {
-  const { cfg, ctx, actions, checkpoint } = turn;
+  const { cfg, ctx, actions, checkpoint, history: messages } = turn;
   const claude = new Anthropic({ apiKey: (await getKey(cfg.id)) || undefined });
   const { effort, fallback } = MODELS[cfg.model];
   messages.push({ role: 'user', content: turn.userText });
@@ -681,10 +700,25 @@ async function runClaude(turn) {
     ...(cachingEnabled ? { cache_control: { type: 'ephemeral' } } : {}),
   };
 
+  const create = () => (fallback
+    ? claude.beta.messages.create({ ...request, betas: [FALLBACK_BETA], fallbacks: 'default' })
+    : claude.messages.create(request));
+  let stripped = false;
+
   for (let step = 0; step < MAX_STEPS; step++) {
-    const res = fallback
-      ? await claude.beta.messages.create({ ...request, betas: [FALLBACK_BETA], fallbacks: 'default' })
-      : await claude.messages.create(request);
+    let res;
+    try {
+      res = await create();
+    } catch (err) {
+      // Safety net: if Claude says an earlier thinking block no longer matches the history
+      // before it, remove every thinking block from this conversation (allowed: the replies
+      // stay, only the old reasoning goes) and try once more. The removal is kept, so later
+      // requests send the same history and stay valid.
+      if (stripped || !isThinkingMismatch(err)) throw err;
+      stripped = true;
+      stripThinking(messages);
+      res = await create();
+    }
     turn.requests++;
     turn.usage = addUsage(turn.usage, readUsage('anthropic', res.usage));
 
@@ -718,6 +752,19 @@ async function runClaude(turn) {
   return { reply: TOO_MANY, actions };
 }
 
+/** A 400 saying a replayed thinking block doesn't match the conversation before it. */
+const isThinkingMismatch = (err) => err instanceof Anthropic.BadRequestError
+  && /thinking/i.test(err.message) && /signature|bound to a different conversation|block_binding/i.test(err.message);
+
+/** Remove all thinking blocks from the history, in place. Each reply keeps its text and tool calls. */
+function stripThinking(history) {
+  for (const m of history) {
+    if (m.role !== 'assistant' || !Array.isArray(m.content)) continue;
+    const kept = m.content.filter((b) => b.type !== 'thinking' && b.type !== 'redacted_thinking');
+    if (kept.length !== m.content.length) m.content = kept.length ? kept : [{ type: 'text', text: '(no text)' }];
+  }
+}
+
 // --- OpenAI-compatible chat/completions (OpenAI, Gemini, Groq, Ollama, …) ---
 
 // Same tools, in the OpenAI "function" format.
@@ -727,7 +774,7 @@ const OPENAI_TOOLS = TOOLS.map((t) => ({
 }));
 
 async function runOpenAI(turn) {
-  const { cfg, ctx, actions } = turn;
+  const { cfg, ctx, actions, history: messages } = turn;
   const key = await getKey(cfg.id);
   messages.push({ role: 'user', content: turn.userText });
 

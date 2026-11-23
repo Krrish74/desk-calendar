@@ -116,9 +116,14 @@ function actionCard(a) {
   return card;
 }
 
+let chatBusy = false;
+
 async function sendChat(text) {
   text = text.trim();
-  if (!text) return;
+  // One message at a time: Enter while the assistant is still answering keeps the text
+  // in the box (send it once the reply is in).
+  if (!text || chatBusy) return;
+  chatBusy = true;
   $('chat-chips')?.remove();
   $('chat-input').value = '';
   addMsg('user', text);
@@ -143,6 +148,7 @@ async function sendChat(text) {
     pending.textContent = err.message;
     pending.className = 'msg bot error';
   } finally {
+    chatBusy = false;
     $('chat-send').disabled = false;
     $('chat-log').scrollTop = $('chat-log').scrollHeight;
     $('chat-input').focus();

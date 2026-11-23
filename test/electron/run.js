@@ -110,20 +110,22 @@ Object.assign(tasks, {
 });
 
 // --- mock AI servers ----------------------------------------------------------------
-// script: a queue of functions (requestBody) → response; each request pops one.
+// script: a queue of functions (requestBody) → response (or a promise of one); each request
+// pops one. A response { __status, body } is sent as an HTTP error.
 let script = [];
 const requests = [];
 const server = http.createServer((req, res) => {
   let body = '';
   req.on('data', (c) => (body += c));
-  req.on('end', () => {
+  req.on('end', async () => {
     const b = body ? JSON.parse(body) : null;
     requests.push({ url: req.url, headers: req.headers, body: b });
     const send = (code, obj) => { res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify(obj)); };
     if (req.method === 'GET') return send(200, { data: [{ id: 'mock-model' }] });
     const next = script.shift();
     if (!next) return send(500, { error: { message: 'mock script empty' } });
-    const out = next(b);
+    const out = await next(b);
+    if (out?.__status) return send(out.__status, out.body);
     if (req.url.startsWith('/v1/messages')) {
       return send(200, { id: 'msg', type: 'message', role: 'assistant', model: b.model, stop_sequence: null, ...out });
     }
@@ -134,6 +136,17 @@ const server = http.createServer((req, res) => {
 /** Claude mock reply helpers. */
 const U = (input, write, read, output) => ({ input_tokens: input, cache_creation_input_tokens: write, cache_read_input_tokens: read, output_tokens: output });
 const claudeTools = (...uses) => () => ({ stop_reason: 'tool_use', usage: U(50, 3000, 0, 40), content: uses.map(([name, input], i) => ({ type: 'tool_use', id: `tu_${name}_${i}_${Math.random().toString(36).slice(2, 6)}`, name, input })) });
+/** Like claudeTools, but the reply starts with a signed thinking block (as real Claude 5.5 replies do). */
+const claudeThinkTools = (...uses) => () => {
+  const r = claudeTools(...uses)();
+  return { ...r, content: [{ type: 'thinking', thinking: 'Look up the tasks first.', signature: 'sig-abc' }, ...r.content] };
+};
+/** A reply that waits until the returned release() is called. */
+function held(reply) {
+  let release;
+  const gate = new Promise((r) => (release = r));
+  return { reply: async (b) => { await gate; return reply(b); }, release };
+}
 const claudeText = (text) => () => ({ stop_reason: 'end_turn', usage: U(60, 0, 3200, 30), content: [{ type: 'text', text }] });
 const lastToolResults = (b) => b.messages[b.messages.length - 1].content.filter((c) => c.type === 'tool_result').map((c) => JSON.parse(c.content));
 
@@ -279,6 +292,50 @@ async function assistantTests(base) {
       eq(r.freshStart, true);
       eq(requests[1].body.messages.length, 1, 'only the new message');
     } finally { Date.now = realNow; }
+  });
+
+  await test('a message sent while the last is still being answered waits its turn', async () => {
+    assistant.reset(); requests.length = 0;
+    const h = held(claudeThinkTools(['list_tasks', {}]));
+    script = [h.reply, claudeText('You have tasks.'), claudeText('Tomorrow is free.')];
+    const first = send('what are my tasks');
+    await until(() => requests.length === 1);
+    const second = send('and tomorrow?');
+    await wait(150);
+    eq(requests.length, 1, 'the second message is not sent while the first is running');
+    h.release();
+    const [a, b] = await Promise.all([first, second]);
+    eq([a.reply, b.reply], ['You have tasks.', 'Tomorrow is free.']);
+    const msgs = requests[2].body.messages;
+    eq(msgs.map((m) => m.role), ['user', 'assistant', 'user', 'assistant', 'user'], 'one turn after the other, not interleaved');
+    eq(msgs[1].content[0], { type: 'thinking', thinking: 'Look up the tasks first.', signature: 'sig-abc' }, 'thinking replayed unchanged');
+    ok(msgs[4].content.endsWith('and tomorrow?'));
+  });
+
+  await test('"New chat" while a reply is running: that reply finishes, the next message starts fresh', async () => {
+    assistant.reset(); requests.length = 0;
+    const h = held(claudeTools(['list_tasks', {}]));
+    script = [h.reply, claudeText('Here they are.'), claudeText('Hello!')];
+    const first = send('my tasks');
+    await until(() => requests.length === 1);
+    assistant.reset();
+    h.release();
+    eq((await first).reply, 'Here they are.');
+    eq(requests[1].body.messages.map((m) => m.role), ['user', 'assistant', 'user'], 'the running turn keeps its own history');
+    await send('hello again');
+    eq(requests[2].body.messages.length, 1, 'next message starts a new chat');
+  });
+
+  await test('Claude rejecting an old thinking block: thinking is removed once and the request retried', async () => {
+    assistant.reset(); requests.length = 0;
+    const mismatch = { type: 'error', error: { type: 'invalid_request_error', message: 'messages.1.content.0: Invalid `signature` in `thinking` block. The block is bound to a different conversation.' } };
+    script = [claudeThinkTools(['list_tasks', {}]), () => ({ __status: 400, body: mismatch }), claudeText('Recovered.'), claudeText('Still fine.')];
+    const r = await send('my tasks');
+    eq(r.reply, 'Recovered.');
+    const retry = requests[2].body.messages;
+    eq(retry[1].content.map((c) => c.type), ['tool_use'], 'thinking gone, tool call kept');
+    await send('thanks');
+    eq(requests[3].body.messages[1].content.map((c) => c.type), ['tool_use'], 'stays removed on later messages');
   });
 
   await test('range limits: more than 31 days is refused politely', async () => {

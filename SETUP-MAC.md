@@ -116,8 +116,8 @@ npm run dist
 
 This makes two disk images in `dist/`, the same as on the Releases page but from your copy of the code:
 
-- `Desk-Calendar-1.0.0-arm64.dmg` for Apple Silicon Macs (M1 and newer)
-- `Desk-Calendar-1.0.0-x64.dmg` for Intel Macs
+- `Desk-Calendar-<version>-arm64.dmg` for Apple Silicon Macs (M1 and newer)
+- `Desk-Calendar-<version>-x64.dmg` for Intel Macs
 
 (Not sure which you have? Apple menu → **About This Mac**: "Chip Apple M…" is Apple Silicon, "Processor Intel…" is
 Intel.) Open the one for your Mac and drag **Desk Calendar** into **Applications**, then open it from Launchpad or
