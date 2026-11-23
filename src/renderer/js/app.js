@@ -64,16 +64,20 @@ $('btn-load-creds').onclick = async () => {
   } catch (e) { $('setup-msg').textContent = e.message; }
 };
 
+let signInWaiting = false;
 $('btn-signin').onclick = async () => {
-  $('setup-msg').textContent = 'Waiting for you to finish in the browser…';
-  $('btn-signin').disabled = true; // one sign-in at a time
+  // Already waiting (the browser tab may have been closed): the main process opens the
+  // same Google page again; the first click's handler finishes the sign-in.
+  if (signInWaiting) { desk.signIn(); return; }
+  signInWaiting = true;
+  $('setup-msg').textContent = 'Waiting for you to finish in the browser… (closed the tab? Click Sign in again.)';
   try {
     unwrap(await desk.signIn());
     showApp();
   } catch (e) {
     $('setup-msg').textContent = 'Sign-in failed: ' + e.message;
   } finally {
-    $('btn-signin').disabled = false;
+    signInWaiting = false;
   }
 };
 
