@@ -28,17 +28,25 @@ model through Ollama, or any OpenAI-compatible server).
 - **Your secrets stay on your computer**: Google sign-in and API keys are encrypted by the operating system
   (DPAPI with your Windows account, or your Mac's Keychain)
 
-## What you need
+## Get started
 
-| | |
-|---|---|
-| **Windows 10 or 11**, or **macOS 12 (Monterey) or newer** | Apple Silicon and Intel Macs both work. |
-| [Node.js](https://nodejs.org/) 22 or newer | Includes npm. Check with `node -v`. On a Mac, the installer from nodejs.org or `brew install node`. |
-| [Git](https://git-scm.com/downloads) | To clone this repository. On a Mac, `git --version` offers to install it if it's missing. |
-| A Google account | The calendar you want to see. |
-| A Google Cloud project (free) | You create your own OAuth client in about 10 minutes: [SETUP-GOOGLE.md](SETUP-GOOGLE.md). |
-| An AI provider (optional) | Only for the assistant. Several are free: [docs/ASSISTANT.md](docs/ASSISTANT.md). |
-| An iPhone + a free Cloudflare account (optional) | Only for the phone app: see [iPhone app](#iphone-app-optional) below. |
+Pick your computer. Each guide is complete on its own, from installing the tools to a normal app in your
+Start menu / Applications folder (about 20 minutes, most of it creating your Google sign-in).
+
+| | Guide | You get |
+|---|---|---|
+| **Windows 10 / 11** | **[SETUP-WINDOWS.md](SETUP-WINDOWS.md)** | An installer (`.exe`), tray icon, Ctrl+Shift+Space, Mica on Windows 11 |
+| **Mac** (macOS 12+, Apple Silicon or Intel) | **[SETUP-MAC.md](SETUP-MAC.md)** | A `.dmg` to drag into Applications, menu bar icon, Cmd shortcuts, Keychain |
+| **iPhone** (optional, add-on) | **[SETUP-IPHONE.md](SETUP-IPHONE.md)** | A Home Screen app with reminders; set it up from either computer |
+
+Both desktop guides use the same Google step, **[SETUP-GOOGLE.md](SETUP-GOOGLE.md)**, and the same code: a fix or
+new feature reaches Windows and Mac at the same time.
+
+## What everyone needs
+
+- A **Google account** with the calendar you want to see, and a free **Google Cloud project** you create in about
+  10 minutes ([SETUP-GOOGLE.md](SETUP-GOOGLE.md)).
+- Optional: an **AI provider** for the assistant. Several are free: [docs/ASSISTANT.md](docs/ASSISTANT.md).
 
 Nobody shares credentials here: everyone who runs this app sets up their **own** Google Cloud project and
 their **own** AI key. Nothing secret is in this repository.
@@ -49,41 +57,13 @@ The same calendar on your iPhone: Agenda / Day / 3-day / Month views, quick add,
 assistant with task planning, and silent reminder notifications. It's an installable web app (`mobile/`) that you
 add to your Home Screen, served by a small, free **Cloudflare Worker** (`worker/`) that keeps you signed in to
 Google, holds the Claude key, sends the reminders, and only lets your own Google account in. No Xcode or
-Apple developer account needed, and the setup works the same from a Windows PC or a Mac.
-
-1. Set up the Google Cloud project ([SETUP-GOOGLE.md](SETUP-GOOGLE.md) steps 1–3) if you haven't already.
-2. Follow **[SETUP-IPHONE.md](SETUP-IPHONE.md)** (about 30 minutes): Cloudflare account, `npm run setup:db`,
-   `npm run deploy`, a Web OAuth client, `npm run secrets`, then Add to Home Screen.
-3. Optional: in the desktop app (Windows or Mac), **Settings → Account → Phone app** links the two, so shown
-   calendars, defaults and "About you" stay the same on both.
+Apple developer account needed, and the setup works the same from a Windows PC or a Mac:
+**[SETUP-IPHONE.md](SETUP-IPHONE.md)** (about 30 minutes). Afterwards, **Settings → Account → Phone app** in the
+desktop app links the two, so shown calendars, defaults and "About you" stay the same on both.
 
 The desktop app doesn't need any of it. The code is explained in [worker/README.md](worker/README.md); its tests
 run with `npm test` inside `worker/`, and `npm run dev:mock` there runs the whole phone app locally against a fake
 calendar.
-
-## Quick start
-
-The same four commands on Windows (PowerShell) and on a Mac (Terminal):
-
-```shell
-git clone <this repository's URL>
-cd desk-calendar
-npm install
-npm start
-```
-
-Then:
-
-1. Follow **[SETUP-GOOGLE.md](SETUP-GOOGLE.md)** once to get your `credentials.json`.
-2. In the app, click **Load credentials.json…**, then **Sign in with Google** (allow both Calendar and Tasks).
-3. Optional: open **Settings → Assistant**, pick a provider and paste its API key
-   (see **[docs/ASSISTANT.md](docs/ASSISTANT.md)**).
-
-On a Mac, the first time the app saves your sign-in, macOS asks whether it may use its key in your Keychain.
-Enter your Mac password and click **Always Allow**. While running from source the menu bar and Dock say
-"Electron"; the built app ([below](#build-the-app)) is called Desk Calendar.
-
-Something not working? See **[docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)**.
 
 ## Tests
 
@@ -91,42 +71,22 @@ Something not working? See **[docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)*
 npm test
 ```
 
-Runs the unit tests (free-time arithmetic) with Node's test runner, then the app tests in Electron: the assistant
+Same command on Windows and Mac. Runs the unit tests (free-time arithmetic) with Node's test runner, then the app tests in Electron: the assistant
 against mock Claude / OpenAI-compatible servers (caching markers, task tools, plan-then-confirm, short ids, cost
 tracking) and the UI in a real window with a stubbed Google account. Nothing touches your real calendar, settings or keys.
 
 `.\scripts\bench.ps1` (Windows) or `./scripts/bench.sh` (Mac) runs the **live cost benchmark**: real Claude Haiku 5.5
 requests against a made-up week, a few cents in total, results written to [docs/COST.md](docs/COST.md).
 
-## Build the app
+## Building the app
 
-`npm run dist` builds for the computer you run it on. Build the Windows app on Windows and the Mac app on a Mac.
-
-**Windows**
-
-```shell
-npm run dist
-```
-
-This produces `dist\Desk Calendar Setup 1.0.0.exe`. Run it to install (Start menu + desktop shortcut,
-uninstall via Windows Settings → Apps). The installer is **unsigned**, so Windows SmartScreen says
-"Windows protected your PC". Click **More info → Run anyway**. That's normal for personal apps.
-
-**Mac**
-
-```shell
-npm run dist
-```
-
-This produces two disk images in `dist/`: `Desk Calendar-1.0.0-arm64.dmg` for Apple Silicon (M1 and newer) and
-`Desk Calendar-1.0.0.dmg` for Intel Macs. Open the one for your Mac and drag **Desk Calendar** into **Applications**.
-A copy you built yourself opens normally. The app isn't signed with an Apple Developer ID, so a copy someone
-*sends* you is blocked at first ("Apple could not verify…"): open **System Settings → Privacy & Security**, scroll
-down and click **Open Anyway** next to Desk Calendar. Uninstall by dragging it from Applications to the Bin.
+`npm run dist` builds for the computer you run it on: an installer on Windows, `.dmg` files on a Mac. The steps,
+and what to click when Windows SmartScreen or macOS Gatekeeper warns about an unsigned app, are in
+[SETUP-WINDOWS.md](SETUP-WINDOWS.md#5-install-it-as-a-normal-app-recommended) and
+[SETUP-MAC.md](SETUP-MAC.md#5-install-it-as-a-normal-app-recommended).
 
 Only `src/` and `package.json` (plus dependencies) go into the package, so a `credentials.json` sitting in
 the project folder is **not** shipped. Each installed copy loads its own credentials on first run.
-Start with Windows / Open at login only takes effect in the built app.
 
 ## The assistant
 
