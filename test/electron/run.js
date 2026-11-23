@@ -379,6 +379,25 @@ async function assistantTests(base) {
     resetTasks();
   });
 
+  await test('guardrail: "Sure, <new request>" after a question is not a yes; "yes, add them" is', async () => {
+    assistant.reset(); requests.length = 0; calls.createTask.length = 0;
+    const add = (t) => ['create_task', { title: t }];
+    script = [
+      claudeText('Your Friday is free. Anything else?'),
+      claudeTools(add('E'), add('F'), add('G'), add('H')),
+      claudeText('Added three. Shall I add H too?'),
+      claudeTools(add('H')),
+      claudeText('Added H.'),
+    ];
+    await send('what is on friday');
+    const r = await send('Sure, add tasks E F G H');
+    eq(calls.createTask.length, 3, 'a new request after "Anything else?" keeps the limit of 3');
+    eq(r.actions.length, 3);
+    await send('yes, add it please');
+    eq(calls.createTask.length, 4, 'a plain approval unlocks the rest');
+    resetTasks();
+  });
+
   await test('guardrail: changing or deleting a meeting with other guests needs a yes; the card shows the real title', async () => {
     assistant.reset(); requests.length = 0; queued.length = 0;
     EVENTS.push({ ...EVENTS[0], id: 'e9', title: 'Budget review', google: { attendees: [{ email: 'you@example.com', self: true }, { email: 'boss@example.com' }] } });
@@ -426,6 +445,15 @@ async function assistantTests(base) {
       try { assistant.setSettings({ baseUrl: 'http://example.com/v1' }); } catch (err) { msg = err.message; }
       ok(/https:\/\//.test(msg), 'refused');
       assistant.setSettings({ baseUrl: 'http://192.168.1.20:1234/v1' }); // a home-network server is fine
+      for (const url of ['http://gaming-pc:11434/v1', 'http://box.lan:1234/v1', 'http://nas.home.arpa/v1',
+        'http://100.101.2.3:11434/v1', 'http://[fd12::1]:11434/v1', 'http://studio.tail1234.ts.net:1234/v1']) {
+        assistant.setSettings({ baseUrl: url }); // your own network: fine
+      }
+      for (const url of ['http://8.8.8.8/v1', 'http://100.200.1.1/v1', 'http://example.lan.evil.com/v1', 'http://1234/v1']) {
+        let refused = false;
+        try { assistant.setSettings({ baseUrl: url }); } catch { refused = true; }
+        ok(refused, `refused: ${url}`);
+      }
     } finally { assistant.setSettings({ provider: before }); }
   });
 
